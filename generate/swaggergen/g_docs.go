@@ -1234,7 +1234,7 @@ func parseObject(d *ast.Object, k string, m *Schema, realTypes *[]string, astPkg
 					continue
 				}
 			} else {
-				// 当前只处理嵌入类型为struct类型的情况,*struct和interface暂时没有处理
+				// 当前只处理嵌入类型为struct类型的情况,*struct和interface暂时没有处理(这两种case对于swagger文档导出应该没有任何用处)
 				tag := ""
 				if field.Tag != nil {
 					stag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
