@@ -33,8 +33,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	beeLogger "hee/logger"
-	bu "hee/utils"
+	beeLogger "github.com/skOak/hee/logger"
+	bu "github.com/skOak/hee/utils"
 	"sort"
 )
 
@@ -602,7 +602,7 @@ func analyseControllerPkg(vendorPath, localName, pkgpath string) {
 			return
 		}
 		if pkgpath == "github.com/astaxie/beego" ||
-			strings.HasPrefix(pkgpath, "hee/") ||
+			strings.HasPrefix(pkgpath, "github.com/skOak/hee/") ||
 			strings.HasPrefix(pkgpath, "github.com/") {
 			return
 		}
@@ -1234,14 +1234,39 @@ func parseObject(d *ast.Object, k string, m *Schema, realTypes *[]string, astPkg
 					continue
 				}
 			} else {
-				for _, pkg := range astPkgs {
-					for _, fl := range pkg.Files {
-						for nameOfObj, obj := range fl.Scope.Objects {
-							if obj.Name == fmt.Sprint(field.Type) {
-								parseObject(obj, nameOfObj, m, realTypes, astPkgs, pkg.Name, fl)
+				// 当前只处理嵌入类型为struct类型的情况,*struct和interface暂时没有处理
+				tag := ""
+				if field.Tag != nil {
+					stag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
+					tag = stag.Get("json")
+				}
+
+				if tag != "" {
+					tagValues := strings.Split(tag, ",")
+					if tagValues[0] == "-" {
+						//if json tag is "-", omit
+						continue
+					} else {
+						//if json tag is "something", output: something #definition/pkgname.Type
+						m.Properties[tagValues[0]] = mp
+						continue
+					}
+				} else {
+					//if no json tag, embed all the fields of the type here
+					nm := &Schema{}
+					for _, pkg := range astPkgs {
+						for _, fl := range pkg.Files {
+							for nameOfObj, obj := range fl.Scope.Objects {
+								if obj.Name == fmt.Sprint(field.Type) {
+									parseObject(obj, nameOfObj, nm, realTypes, astPkgs, pkg.Name, fl)
+								}
 							}
 						}
 					}
+					for name, p := range nm.Properties {
+						m.Properties[name] = p
+					}
+					continue
 				}
 			}
 		}
@@ -1329,7 +1354,12 @@ func typeAnalyser(f *ast.Field) (isSlice bool, realType, swaggerType string) {
 			return false, "map", basicTypes[val]
 		}
 		return false, val, "object"
-		//case *ast.Ident: // embed struct [*]([pkgName.]TypeName)
+	case *ast.Ident: // embed struct [pkgName.]TypeName
+		basicType := fmt.Sprint(t)
+		if k, ok := basicTypes[basicType]; ok {
+			return false, basicType, k
+		}
+		return false, basicType, "object"
 	}
 	basicType := fmt.Sprint(f.Type)
 	if object, isStdLibObject := stdlibObject[basicType]; isStdLibObject {

@@ -26,9 +26,9 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
-	beeLogger "hee/logger"
-	"hee/logger/colors"
-	"hee/utils"
+	beeLogger "github.com/skOak/hee/logger"
+	"github.com/skOak/hee/logger/colors"
+	"github.com/skOak/hee/utils"
 )
 
 var Hproseconf = `appname = {{.Appname}}

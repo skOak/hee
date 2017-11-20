@@ -7,12 +7,13 @@ import (
 	"os"
 	"strings"
 
-	beeLogger "hee/logger"
+	beeLogger "github.com/skOak/hee/logger"
 )
 
 var (
 	swaggerVersion = "3"
-	Swaggerlink    = "https://github.com/beego/swagger/archive/v" + swaggerVersion + ".zip"
+	//Swaggerlink    = "https://github.com/beego/swagger/archive/v" + swaggerVersion + ".zip"
+	Swaggerlink = "https://raw.githubusercontent.com/skOak/hee/master/swagger.zip"
 )
 
 func DownloadFromURL(url, fileName string) {

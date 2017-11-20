@@ -24,7 +24,7 @@ import (
 	"text/template"
 	"time"
 
-	"hee/logger/colors"
+	"github.com/skOak/hee/logger/colors"
 )
 
 var errInvalidLogLevel = errors.New("logger: invalid log level")

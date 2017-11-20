@@ -21,9 +21,9 @@ import (
 	"strings"
 	"time"
 
-	"hee/logger"
-	"hee/logger/colors"
-	"hee/utils"
+	"github.com/skOak/hee/logger"
+	"github.com/skOak/hee/logger/colors"
+	"github.com/skOak/hee/utils"
 )
 
 const (

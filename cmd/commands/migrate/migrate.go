@@ -23,12 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"hee/cmd/commands"
-	"hee/cmd/commands/version"
-	"hee/config"
-	"hee/utils"
+	"github.com/skOak/hee/cmd/commands"
+	"github.com/skOak/hee/cmd/commands/version"
+	"github.com/skOak/hee/config"
+	"github.com/skOak/hee/utils"
 
-	beeLogger "hee/logger"
+	beeLogger "github.com/skOak/hee/logger"
 )
 
 var CmdMigrate = &commands.Command{

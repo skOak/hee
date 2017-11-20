@@ -24,12 +24,12 @@ import (
 
 	"strings"
 
-	"hee/cmd/commands"
-	"hee/cmd/commands/version"
-	"hee/config"
-	"hee/logger"
-	"hee/logger/colors"
-	"hee/utils"
+	"github.com/skOak/hee/cmd/commands"
+	"github.com/skOak/hee/cmd/commands/version"
+	"github.com/skOak/hee/config"
+	"github.com/skOak/hee/logger"
+	"github.com/skOak/hee/logger/colors"
+	"github.com/skOak/hee/utils"
 )
 
 var cmdRs = &commands.Command{

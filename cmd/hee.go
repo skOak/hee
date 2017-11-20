@@ -16,22 +16,22 @@
 package cmd
 
 import (
-	"hee/cmd/commands"
-	_ "hee/cmd/commands/api"
-	_ "hee/cmd/commands/bale"
-	_ "hee/cmd/commands/beefix"
-	_ "hee/cmd/commands/dlv"
-	_ "hee/cmd/commands/dockerize"
-	_ "hee/cmd/commands/generate"
-	_ "hee/cmd/commands/hprose"
-	_ "hee/cmd/commands/migrate"
-	_ "hee/cmd/commands/new"
-	_ "hee/cmd/commands/pack"
-	_ "hee/cmd/commands/rs"
-	_ "hee/cmd/commands/run"
-	_ "hee/cmd/commands/server"
-	_ "hee/cmd/commands/version"
-	"hee/utils"
+	"github.com/skOak/hee/cmd/commands"
+	_ "github.com/skOak/hee/cmd/commands/api"
+	_ "github.com/skOak/hee/cmd/commands/bale"
+	_ "github.com/skOak/hee/cmd/commands/beefix"
+	_ "github.com/skOak/hee/cmd/commands/dlv"
+	_ "github.com/skOak/hee/cmd/commands/dockerize"
+	_ "github.com/skOak/hee/cmd/commands/generate"
+	_ "github.com/skOak/hee/cmd/commands/hprose"
+	_ "github.com/skOak/hee/cmd/commands/migrate"
+	_ "github.com/skOak/hee/cmd/commands/new"
+	_ "github.com/skOak/hee/cmd/commands/pack"
+	_ "github.com/skOak/hee/cmd/commands/rs"
+	_ "github.com/skOak/hee/cmd/commands/run"
+	_ "github.com/skOak/hee/cmd/commands/server"
+	_ "github.com/skOak/hee/cmd/commands/version"
+	"github.com/skOak/hee/utils"
 )
 
 func IfGenerateDocs(name string, args []string) bool {

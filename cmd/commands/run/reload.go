@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	beeLogger "hee/logger"
+	beeLogger "github.com/skOak/hee/logger"
 )
 
 // wsBroker maintains the set of active clients and broadcasts messages to the clients.

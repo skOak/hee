@@ -17,13 +17,13 @@ import (
 	"os"
 	"strings"
 
-	"hee/cmd/commands"
-	"hee/cmd/commands/version"
-	"hee/config"
-	"hee/generate"
-	"hee/generate/swaggergen"
-	"hee/logger"
-	"hee/utils"
+	"github.com/skOak/hee/cmd/commands"
+	"github.com/skOak/hee/cmd/commands/version"
+	"github.com/skOak/hee/config"
+	"github.com/skOak/hee/generate"
+	"github.com/skOak/hee/generate/swaggergen"
+	"github.com/skOak/hee/logger"
+	"github.com/skOak/hee/utils"
 )
 
 var CmdGenerate = &commands.Command{

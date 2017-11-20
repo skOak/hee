@@ -25,10 +25,10 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"hee/config"
-	beeLogger "hee/logger"
-	"hee/logger/colors"
-	"hee/utils"
+	"github.com/skOak/hee/config"
+	beeLogger "github.com/skOak/hee/logger"
+	"github.com/skOak/hee/logger/colors"
+	"github.com/skOak/hee/utils"
 )
 
 var (
