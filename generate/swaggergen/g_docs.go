@@ -274,15 +274,20 @@ func GenerateDocs(curpath string, downdoc bool) {
 	for _, d := range f.Decls {
 		switch specDecl := d.(type) {
 		case *ast.FuncDecl:
+			if specDecl.Name.Name != "router" {
+				continue
+			}
 			for _, l := range specDecl.Body.List {
 				switch stmt := l.(type) {
 				case *ast.BlockStmt: // { v1:=svr.Group("v1"); v1.GET("version",s.Version); }
-					analyseNewGroup("/", stmt)
+					analyseNewGroup("/", stmt, "TOP")
+				case *ast.IfStmt:
+					analyseNewGroup("/", stmt.Body, "TOP")
 				case *ast.ExprStmt: // svr.GET("/captcha", s.GetCaptcha)
 					analyseNewRouter("/", stmt.X.(*ast.CallExpr), "TOP")
 				case *ast.AssignStmt:
 					// won't go here currently
-					beeLogger.Log.Warnf("won't go here currently:%v", stmt.Tok.String())
+					//beeLogger.Log.Warnf("won't go here currently:%v", stmt.Tok.String())
 					continue
 					for _, l := range stmt.Rhs {
 						if v, ok := l.(*ast.CallExpr); ok {
@@ -326,8 +331,9 @@ func GenerateDocs(curpath string, downdoc bool) {
 								}
 							}
 						}
-
 					}
+				default:
+					beeLogger.Log.Infof("Unknown statement<%#+v>", stmt)
 				}
 			}
 		}
@@ -369,7 +375,7 @@ func routerMethods(fname string) (methods []string, ok bool) {
 	return
 }
 
-func analyseNewGroup(baseUrl string, cg *ast.BlockStmt) {
+func analyseNewGroup(baseUrl string, cg *ast.BlockStmt, stag string) {
 	if baseUrl == "" {
 		baseUrl = "/"
 	}
@@ -384,7 +390,7 @@ func analyseNewGroup(baseUrl string, cg *ast.BlockStmt) {
 
 	currPath := ""
 	currGName := ""
-	currTag := ""
+	currTag := stag // 默认用传入的tag
 	for _, stmt := range cg.List {
 		switch v := stmt.(type) {
 		case *ast.AssignStmt: // v1 := svr.Group("v1")
@@ -419,7 +425,7 @@ func analyseNewGroup(baseUrl string, cg *ast.BlockStmt) {
 						}
 						currPath = strings.Trim(kks.Args[0].(*ast.BasicLit).Value, "\"")
 						currGName = fmt.Sprintln(kks.Fun.(*ast.SelectorExpr).X)
-						currTag = ks.Comment.Text()
+						currTag = ks.Comment.Text() // 覆盖默认的tag信息
 					} else {
 						beeLogger.Log.Fatalf("analyseNewGroup:declaration<%v> inside {} is not Group creation", stmt)
 						return
@@ -432,7 +438,9 @@ func analyseNewGroup(baseUrl string, cg *ast.BlockStmt) {
 		case *ast.ExprStmt: // v1.GET("version", s.Version)
 			analyseNewRouter(baseUrl+currPath, v.X.(*ast.CallExpr), currTag)
 		case *ast.BlockStmt: // { children group inside }
-			analyseNewGroup(baseUrl+currPath, v)
+			analyseNewGroup(baseUrl+currPath, v, currTag)
+		case *ast.IfStmt:
+			analyseNewGroup(baseUrl+currPath, v.Body, currTag)
 		}
 	}
 }
