@@ -142,6 +142,7 @@ var typeMappingPostgres = map[string]string{
 type Table struct {
 	Name          string
 	Pk            string
+	PkType        string
 	Uk            []string
 	Fk            map[string]*ForeignKey
 	Columns       []*Column
@@ -258,9 +259,9 @@ func (tag *OrmTag) String() string {
 		return ""
 	}
 	if tag.Comment != "" {
-		return fmt.Sprintf("`orm:\"%s\" description:\"%s\"`", strings.Join(ormOptions, ";"), tag.Comment)
+		return fmt.Sprintf("`json:\"%s\" orm:\"%s\" description:\"%s\"`", tag.Column, strings.Join(ormOptions, ";"), tag.Comment)
 	}
-	return fmt.Sprintf("`orm:\"%s\"`", strings.Join(ormOptions, ";"))
+	return fmt.Sprintf("`json:\"%s\" orm:\"%s\"`", tag.Column, strings.Join(ormOptions, ";"))
 }
 
 func GenerateAppcode(driver, connStr, level, tables, currpath string) {
@@ -442,6 +443,15 @@ func (mysqlDB *MysqlDB) GetColumns(db *sql.DB, table *Table, blackList map[strin
 		if err != nil {
 			beeLogger.Log.Fatalf("%s", err)
 		}
+		if isSQLSignedIntType(dataType) {
+			sign := extractIntSignness(columnType)
+			if sign == "unsigned" && extra != "auto_increment" {
+				col.Type, err = mysqlDB.GetGoDataType(dataType + " " + sign)
+				if err != nil {
+					beeLogger.Log.Fatalf("%s", err)
+				}
+			}
+		}
 
 		// Tag info
 		tag := new(OrmTag)
@@ -449,7 +459,8 @@ func (mysqlDB *MysqlDB) GetColumns(db *sql.DB, table *Table, blackList map[strin
 		tag.Comment = columnComment
 		if table.Pk == colName {
 			col.Name = "Id"
-			col.Type = "int"
+			//col.Type = "int"
+			table.PkType = col.Type
 			if extra == "auto_increment" {
 				tag.Auto = true
 			} else {
@@ -474,15 +485,6 @@ func (mysqlDB *MysqlDB) GetColumns(db *sql.DB, table *Table, blackList map[strin
 				}
 				if isNullable == "YES" {
 					tag.Null = true
-				}
-				if isSQLSignedIntType(dataType) {
-					sign := extractIntSignness(columnType)
-					if sign == "unsigned" && extra != "auto_increment" {
-						col.Type, err = mysqlDB.GetGoDataType(dataType + " " + sign)
-						if err != nil {
-							beeLogger.Log.Fatalf("%s", err)
-						}
-					}
 				}
 				if isSQLStringType(dataType) {
 					tag.Size = extractColSize(columnType)
@@ -786,6 +788,7 @@ func writeModelFiles(tables []*Table, mPath string, selectedTables map[string]bo
 		fileStr := strings.Replace(template, "{{modelStruct}}", tb.String(), 1)
 		fileStr = strings.Replace(fileStr, "{{modelName}}", utils.CamelCase(tb.Name), -1)
 		fileStr = strings.Replace(fileStr, "{{tableName}}", tb.Name, -1)
+		fileStr = strings.Replace(fileStr, "{{pkType}}", tb.PkType, -1)
 
 		// If table contains time field, import time.Time package
 		timePkg := ""
@@ -1007,7 +1010,6 @@ const (
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	{{timePkg}}
 	"github.com/astaxie/beego/orm"
@@ -1033,7 +1035,7 @@ func Add{{modelName}}(m *{{modelName}}) (id int64, err error) {
 
 // Get{{modelName}}ById retrieves {{modelName}} by Id. Returns error if
 // Id doesn't exist
-func Get{{modelName}}ById(id int) (v *{{modelName}}, err error) {
+func Get{{modelName}}ById(id {{pkType}}) (v *{{modelName}}, err error) {
 	o := orm.NewOrm()
 	v = &{{modelName}}{Id: id}
 	if err = o.Read(v); err == nil {
@@ -1044,8 +1046,8 @@ func Get{{modelName}}ById(id int) (v *{{modelName}}, err error) {
 
 // GetAll{{modelName}} retrieves all {{modelName}} matches certain condition. Returns empty list if
 // no records exist
-func GetAll{{modelName}}(query map[string]string, fields []string, sortby []string, order []string,
-	offset int64, limit int64) (ml []interface{}, err error) {
+func GetAll{{modelName}}(query map[string]string, sortby []string, order []string,
+	offset int64, limit int64) (ml []*{{modelName}}, err error) {
 	o := orm.NewOrm()
 	qs := o.QueryTable(new({{modelName}}))
 	// query k=v
@@ -1097,24 +1099,9 @@ func GetAll{{modelName}}(query map[string]string, fields []string, sortby []stri
 		}
 	}
 
-	var l []{{modelName}}
+	ml = make([]*{{modelName}},0)
 	qs = qs.OrderBy(sortFields...)
-	if _, err = qs.Limit(limit, offset).All(&l, fields...); err == nil {
-		if len(fields) == 0 {
-			for _, v := range l {
-				ml = append(ml, v)
-			}
-		} else {
-			// trim unused fields
-			for _, v := range l {
-				m := make(map[string]interface{})
-				val := reflect.ValueOf(v)
-				for _, fname := range fields {
-					m[fname] = val.FieldByName(fname).Interface()
-				}
-				ml = append(ml, m)
-			}
-		}
+	if _, err = qs.Limit(limit, offset).All(&ml); err == nil {
 		return ml, nil
 	}
 	return nil, err
@@ -1137,7 +1124,7 @@ func Update{{modelName}}ById(m *{{modelName}}) (err error) {
 
 // Delete{{modelName}} deletes {{modelName}} by Id and returns error if
 // the record to be deleted doesn't exist
-func Delete{{modelName}}(id int) (err error) {
+func Delete{{modelName}}(id {{pkType}}) (err error) {
 	o := orm.NewOrm()
 	v := {{modelName}}{Id: id}
 	// ascertain id exists in the database
