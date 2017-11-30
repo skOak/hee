@@ -467,6 +467,10 @@ func analyseNewRouter(baseUrl string, ce *ast.CallExpr, stag string) {
 	if !ok {
 		return
 	}
+	if _, ok := ce.Args[0].(*ast.BasicLit); !ok {
+		// omit if router path is not static
+		return
+	}
 	index := 0
 	if selName == "Handle" {
 		methods = []string{
