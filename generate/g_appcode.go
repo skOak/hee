@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"text/template"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
@@ -147,6 +148,7 @@ type Table struct {
 	Fk            map[string]*ForeignKey
 	Columns       []*Column
 	ImportTimePkg bool
+	IdDelete      bool // 是否存在is_deleleted字段
 }
 
 // Column reprsents a column for a table
@@ -182,6 +184,7 @@ type OrmTag struct {
 	RelOne      bool
 	ReverseOne  bool
 	RelFk       bool
+	TableFk     string
 	ReverseMany bool
 	RelM2M      bool
 	Comment     string //column comment
@@ -198,7 +201,7 @@ func (tb *Table) String() string {
 }
 
 // String returns the source code string of a field in Table struct
-// It maps to a column in database table. e.g. Id int `orm:"column(id);auto"`
+// It maps to a column in database table. e.g. Id int `gorm:"column:id;auto"`
 func (col *Column) String() string {
 	return fmt.Sprintf("%s %s %s", col.Name, col.Type, col.Tag.String())
 }
@@ -206,62 +209,67 @@ func (col *Column) String() string {
 // String returns the ORM tag string for a column
 func (tag *OrmTag) String() string {
 	var ormOptions []string
+	var sqlOptions []string
 	if tag.Column != "" {
-		ormOptions = append(ormOptions, fmt.Sprintf("column(%s)", tag.Column))
+		ormOptions = append(ormOptions, fmt.Sprintf("column:%s", tag.Column))
 	}
 	if tag.Auto {
-		ormOptions = append(ormOptions, "auto")
+		ormOptions = append(ormOptions, "AUTO_INCREMENT")
 	}
 	if tag.Size != "" {
-		ormOptions = append(ormOptions, fmt.Sprintf("size(%s)", tag.Size))
+		ormOptions = append(ormOptions, fmt.Sprintf("size:%s:", tag.Size))
 	}
 	if tag.Type != "" {
-		ormOptions = append(ormOptions, fmt.Sprintf("type(%s)", tag.Type))
+		ormOptions = append(ormOptions, fmt.Sprintf("type:%s", tag.Type))
 	}
-	if tag.Null {
-		ormOptions = append(ormOptions, "null")
+	if !tag.Null {
+		ormOptions = append(ormOptions, "not null")
 	}
-	if tag.AutoNow {
-		ormOptions = append(ormOptions, "auto_now")
+	if tag.AutoNow || tag.AutoNowAdd {
+		//ormOptions = append(ormOptions, "auto_now")
+		sqlOptions = append(sqlOptions, "default:current_timestamp")
 	}
-	if tag.AutoNowAdd {
-		ormOptions = append(ormOptions, "auto_now_add")
-	}
-	if tag.Decimals != "" {
-		ormOptions = append(ormOptions, fmt.Sprintf("digits(%s);decimals(%s)", tag.Digits, tag.Decimals))
-	}
+	//if tag.AutoNowAdd {
+	//	ormOptions = append(ormOptions, "auto_now_add")
+	//}
+	//if tag.Decimals != "" {
+	//	ormOptions = append(ormOptions, fmt.Sprintf("digits(%s);decimals(%s)", tag.Digits, tag.Decimals))
+	//}
 	if tag.RelFk {
-		ormOptions = append(ormOptions, "rel(fk)")
+		ormOptions = append(ormOptions, fmt.Sprintf("ForeignKey:%s", tag.TableFk))
 	}
-	if tag.RelOne {
-		ormOptions = append(ormOptions, "rel(one)")
-	}
-	if tag.ReverseOne {
-		ormOptions = append(ormOptions, "reverse(one)")
-	}
-	if tag.ReverseMany {
-		ormOptions = append(ormOptions, "reverse(many)")
-	}
-	if tag.RelM2M {
-		ormOptions = append(ormOptions, "rel(m2m)")
-	}
+	//if tag.RelOne {
+	//	ormOptions = append(ormOptions, "rel(one)")
+	//}
+	//if tag.ReverseOne {
+	//	ormOptions = append(ormOptions, "reverse(one)")
+	//}
+	//if tag.ReverseMany {
+	//	ormOptions = append(ormOptions, "reverse(many)")
+	//}
+	//if tag.RelM2M {
+	//	ormOptions = append(ormOptions, "rel(m2m)")
+	//}
 	if tag.Pk {
-		ormOptions = append(ormOptions, "pk")
+		ormOptions = append(ormOptions, "primary_key")
 	}
 	if tag.Unique {
 		ormOptions = append(ormOptions, "unique")
 	}
 	if tag.Default != "" {
-		ormOptions = append(ormOptions, fmt.Sprintf("default(%s)", tag.Default))
+		ormOptions = append(sqlOptions, fmt.Sprintf("default:%s", tag.Default))
 	}
 
 	if len(ormOptions) == 0 {
 		return ""
 	}
 	if tag.Comment != "" {
-		return fmt.Sprintf("`json:\"%s\" orm:\"%s\" description:\"%s\"`", tag.Column, strings.Join(ormOptions, ";"), tag.Comment)
+		return fmt.Sprintf("`json:\"%s\" gorm:\"%s\" description:\"%s\"`", tag.Column, strings.Join(ormOptions, ";"), tag.Comment)
 	}
-	return fmt.Sprintf("`json:\"%s\" orm:\"%s\"`", tag.Column, strings.Join(ormOptions, ";"))
+	if len(sqlOptions) > 0 {
+		return fmt.Sprintf("`json:\"%s\" gorm:\"%s\" sql:\"%s\"`", tag.Column, strings.Join(ormOptions, ";"), strings.Join(sqlOptions, ";"))
+	}
+	return fmt.Sprintf("`json:\"%s\" gorm:\"%s\"`", tag.Column, strings.Join(ormOptions, ";"))
 }
 
 func GenerateAppcode(driver, connStr, level, tables, currpath string) {
@@ -319,7 +327,7 @@ func gen(dbms, connStr string, mode byte, selectedTableNames map[string]bool, ap
 		mvcPath.RouterPath = path.Join(apppath, "routers")
 		createPaths(mode, mvcPath)
 		pkgPath := getPackagePath(apppath)
-		writeSourceFiles(pkgPath, tables, mode, mvcPath, selectedTableNames)
+		writeSourceFiles(dbms, pkgPath, tables, mode, mvcPath, selectedTableNames)
 	} else {
 		beeLogger.Log.Fatalf("Generating app code from '%s' database is not supported yet.", dbms)
 	}
@@ -476,6 +484,7 @@ func (mysqlDB *MysqlDB) GetColumns(db *sql.DB, table *Table, blackList map[strin
 			if isFk && !isBl {
 				tag.RelFk = true
 				refStructName := fkCol.RefTable
+				tag.TableFk = refStructName
 				col.Name = utils.CamelCase(colName)
 				col.Type = "*" + utils.CamelCase(refStructName)
 			} else {
@@ -644,6 +653,10 @@ func (postgresDB *PostgresDB) GetColumns(db *sql.DB, table *Table, blackList map
 		if err != nil {
 			beeLogger.Log.Fatalf("%s", err)
 		}
+		if colName == "is_deleted" {
+			// 如果存在该列，则会记录需要用这个字段来代表删除动作
+			table.IdDelete = true
+		}
 
 		// Tag info
 		tag := new(OrmTag)
@@ -666,6 +679,7 @@ func (postgresDB *PostgresDB) GetColumns(db *sql.DB, table *Table, blackList map
 			if isFk && !isBl {
 				tag.RelFk = true
 				refStructName := fkCol.RefTable
+				tag.TableFk = refStructName
 				col.Name = utils.CamelCase(colName)
 				col.Type = "*" + utils.CamelCase(refStructName)
 			} else {
@@ -730,10 +744,10 @@ func createPaths(mode byte, paths *MvcPath) {
 // writeSourceFiles generates source files for model/controller/router
 // It will wipe the following directories and recreate them:./models, ./controllers, ./routers
 // Newly geneated files will be inside these folders.
-func writeSourceFiles(pkgPath string, tables []*Table, mode byte, paths *MvcPath, selectedTables map[string]bool) {
+func writeSourceFiles(dbms, pkgPath string, tables []*Table, mode byte, paths *MvcPath, selectedTables map[string]bool) {
 	if (OModel & mode) == OModel {
 		beeLogger.Log.Info("Creating model files...")
-		writeModelFiles(tables, paths.ModelPath, selectedTables)
+		writeModelFiles(dbms, tables, paths.ModelPath, selectedTables)
 	}
 	if (OController & mode) == OController {
 		beeLogger.Log.Info("Creating controller files...")
@@ -746,7 +760,7 @@ func writeSourceFiles(pkgPath string, tables []*Table, mode byte, paths *MvcPath
 }
 
 // writeModelFiles generates model files
-func writeModelFiles(tables []*Table, mPath string, selectedTables map[string]bool) {
+func writeModelFiles(dbms string, tables []*Table, mPath string, selectedTables map[string]bool) {
 	w := colors.NewColorWriter(os.Stdout)
 
 	for _, tb := range tables {
@@ -779,13 +793,13 @@ func writeModelFiles(tables []*Table, mPath string, selectedTables map[string]bo
 				continue
 			}
 		}
-		var template string
+		var tmpl string
 		if tb.Pk == "" {
-			template = StructModelTPL
+			tmpl = StructModelTPL
 		} else {
-			template = ModelTPL
+			tmpl = ModelTPL
 		}
-		fileStr := strings.Replace(template, "{{modelStruct}}", tb.String(), 1)
+		fileStr := strings.Replace(tmpl, "{{modelStruct}}", tb.String(), 1)
 		fileStr = strings.Replace(fileStr, "{{modelName}}", utils.CamelCase(tb.Name), -1)
 		fileStr = strings.Replace(fileStr, "{{tableName}}", tb.Name, -1)
 		fileStr = strings.Replace(fileStr, "{{pkType}}", tb.PkType, -1)
@@ -799,12 +813,58 @@ func writeModelFiles(tables []*Table, mPath string, selectedTables map[string]bo
 		}
 		fileStr = strings.Replace(fileStr, "{{timePkg}}", timePkg, -1)
 		fileStr = strings.Replace(fileStr, "{{importTimePkg}}", importTimePkg, -1)
-		if _, err := f.WriteString(fileStr); err != nil {
-			beeLogger.Log.Fatalf("Could not write model file to '%s': %s", fpath, err)
+		//if _, err := f.WriteString(fileStr); err != nil {
+		//	beeLogger.Log.Fatalf("Could not write model file to '%s': %s", fpath, err)
+		//}
+		t, err := template.New("").Parse(fileStr)
+		if err != nil {
+			beeLogger.Log.Fatalf("new template fileStr failed <%s>", err)
+		}
+		err = t.Execute(f, &struct{ IdDelete bool }{tb.IdDelete})
+		if err != nil {
+			beeLogger.Log.Fatalf("execute template fileStr failed <%s>", err)
+			f.Truncate(0)
 		}
 		utils.CloseFile(f)
 		fmt.Fprintf(w, "\t%s%screate%s\t %s%s\n", "\x1b[32m", "\x1b[1m", "\x1b[21m", fpath, "\x1b[0m")
 		utils.FormatSourceCode(fpath)
+	}
+
+	//generate models.go
+	fpath := path.Join(mPath, "models.go")
+	var f *os.File
+	var err error
+	if utils.IsExist(fpath) {
+		beeLogger.Log.Warnf("'%s' already exists. Do you want to overwrite it? [Yes|No] ", fpath)
+		if utils.AskForConfirmation() {
+			f, err = os.OpenFile(fpath, os.O_RDWR|os.O_TRUNC, 0666)
+			if err != nil {
+				beeLogger.Log.Warnf("%s", err)
+				return
+			}
+		} else {
+			beeLogger.Log.Warnf("Skipped create file '%s'", fpath)
+			return
+		}
+	} else {
+		f, err = os.OpenFile(fpath, os.O_CREATE|os.O_RDWR, 0666)
+		if err != nil {
+			beeLogger.Log.Warnf("%s", err)
+			return
+		}
+	}
+	defer utils.CloseFile(f)
+
+	t, err := template.New("").Parse(ModelsTPL)
+	if err != nil {
+		beeLogger.Log.Fatalf("template ModelsTPL faield <%s>", err)
+		return
+	}
+	err = t.Execute(f, &struct{ Dialect string }{dbms})
+	if err != nil {
+		beeLogger.Log.Fatalf("template ModelsTPL faield <%s>", err)
+		f.Truncate(0)
+		return
 	}
 }
 
@@ -1008,131 +1068,71 @@ const (
 	ModelTPL = `package models
 
 import (
-	"errors"
-	"fmt"
-	"strings"
 	{{timePkg}}
-	"github.com/astaxie/beego/orm"
 )
 
 {{modelStruct}}
 
-func (t *{{modelName}}) TableName() string {
+func ({{modelName}}) TableName() string {
 	return "{{tableName}}"
-}
-
-func init() {
-	orm.RegisterModel(new({{modelName}}))
 }
 
 // Add{{modelName}} insert a new {{modelName}} into database and returns
 // last inserted Id on success.
-func Add{{modelName}}(m *{{modelName}}) (id int64, err error) {
-	o := orm.NewOrm()
-	id, err = o.Insert(m)
-	return
+func Add{{modelName}}(m *{{modelName}}) (id {{pkType}}, err error) {
+	err = DB().Create(m).Error
+	if err != nil {
+		return 0, err
+	}
+	return m.Id, nil
 }
 
 // Get{{modelName}}ById retrieves {{modelName}} by Id. Returns error if
 // Id doesn't exist
 func Get{{modelName}}ById(id {{pkType}}) (v *{{modelName}}, err error) {
-	o := orm.NewOrm()
 	v = &{{modelName}}{Id: id}
-	if err = o.Read(v); err == nil {
-		return v, nil
-	}
-	return nil, err
-}
-
-// GetAll{{modelName}} retrieves all {{modelName}} matches certain condition. Returns empty list if
-// no records exist
-func GetAll{{modelName}}(query map[string]string, sortby []string, order []string,
-	offset int64, limit int64) (ml []*{{modelName}}, err error) {
-	o := orm.NewOrm()
-	qs := o.QueryTable(new({{modelName}}))
-	// query k=v
-	for k, v := range query {
-		// rewrite dot-notation to Object__Attribute
-		k = strings.Replace(k, ".", "__", -1)
-		if strings.Contains(k, "isnull") {
-			qs = qs.Filter(k, (v == "true" || v == "1"))
-		} else {
-			qs = qs.Filter(k, v)
-		}
-	}
-	// order by:
-	var sortFields []string
-	if len(sortby) != 0 {
-		if len(sortby) == len(order) {
-			// 1) for each sort field, there is an associated order
-			for i, v := range sortby {
-				orderby := ""
-				if order[i] == "desc" {
-					orderby = "-" + v
-				} else if order[i] == "asc" {
-					orderby = v
-				} else {
-					return nil, errors.New("Error: Invalid order. Must be either [asc|desc]")
-				}
-				sortFields = append(sortFields, orderby)
-			}
-			qs = qs.OrderBy(sortFields...)
-		} else if len(sortby) != len(order) && len(order) == 1 {
-			// 2) there is exactly one order, all the sorted fields will be sorted by this order
-			for _, v := range sortby {
-				orderby := ""
-				if order[0] == "desc" {
-					orderby = "-" + v
-				} else if order[0] == "asc" {
-					orderby = v
-				} else {
-					return nil, errors.New("Error: Invalid order. Must be either [asc|desc]")
-				}
-				sortFields = append(sortFields, orderby)
-			}
-		} else if len(sortby) != len(order) && len(order) != 1 {
-			return nil, errors.New("Error: 'sortby', 'order' sizes mismatch or 'order' size is not 1")
-		}
-	} else {
-		if len(order) != 0 {
-			return nil, errors.New("Error: unused 'order' fields")
-		}
-	}
-
-	ml = make([]*{{modelName}},0)
-	qs = qs.OrderBy(sortFields...)
-	if _, err = qs.Limit(limit, offset).All(&ml); err == nil {
-		return ml, nil
-	}
-	return nil, err
-}
-
-// Update{{modelName}} updates {{modelName}} by Id and returns error if
-// the record to be updated doesn't exist
-func Update{{modelName}}ById(m *{{modelName}}) (err error) {
-	o := orm.NewOrm()
-	v := {{modelName}}{Id: m.Id}
-	// ascertain id exists in the database
-	if err = o.Read(&v); err == nil {
-		var num int64
-		if num, err = o.Update(m); err == nil {
-			fmt.Println("Number of records updated in database:", num)
-		}
-	}
+	err = DB().First(v).Error
 	return
 }
 
-// Delete{{modelName}} deletes {{modelName}} by Id and returns error if
+// Search{{modelName}}s retrieves all {{modelName}}(not deleted recoreds) matches certain condition. Returns empty list if
+// no records exist
+func Search{{modelName}}s(query, order string, offset, limit uint64, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
+	{{if .IdDelete}}if query != "" {
+		query += " and is_delete = 0"
+	} else {
+		query = "is_delete = 0"
+	}{{end}}
+	qs := DB().Where(query, queryArgs...)
+	if order != "" {
+		qs = qs.Order(order)
+	}
+	if offset > 0 {
+		qs = qs.Offset(offset)
+	}
+	if limit > 0 {
+		qs = qs.Limit(limit)
+	}
+	ml = make([]*{{modelName}}, 0)
+	err = qs.Find(&ml).Error
+	return
+}
+
+// Update{{modelName}} updates {{modelName}}(all changed fields) by Id and returns error if
+// the record to be updated doesn't exist
+func Update{{modelName}}ById(m *{{modelName}}) (err error) {
+	return DB().Save(m).Error
+}
+
+// Delete{{modelName}} deletes {{modelName}}(set IsDeleted to 1) by Id and returns error if
 // the record to be deleted doesn't exist
 func Delete{{modelName}}(id {{pkType}}) (err error) {
-	o := orm.NewOrm()
-	v := {{modelName}}{Id: id}
 	// ascertain id exists in the database
-	if err = o.Read(&v); err == nil {
-		var num int64
-		if num, err = o.Delete(&{{modelName}}{Id: id}); err == nil {
-			fmt.Println("Number of records deleted in database:", num)
-		}
+	v := {{modelName}}{Id: id}
+	if err = DB().First(&v).Error; err == nil {
+		{{if .IdDelete}}v.IsDeleted = 1
+		return DB().Save(&v).Error
+		{{else}}return DB().Delete(&v).Error{{end}}
 	}
 	return
 }
@@ -1337,5 +1337,50 @@ func init() {
 				&controllers.{{ctrlName}}Controller{},
 			),
 		),
+`
+
+	ModelsTPL = `
+package models
+
+import (
+	"strings"
+
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/{{.Dialect}}"
+)
+
+var db *gorm.DB
+
+func Open(dialect, connStr string) (err error) {
+	{{if eq .Dialect "mysql"}}if !strings.Contains(connStr, "parseTime") {
+		// 对MySQL的特殊处理
+		connStr += "&parseTime=True"
+	}{{end}}
+	db, err = gorm.Open("{{.Dialect}}", connStr)
+	return
+}
+
+func DB() *gorm.DB {
+	if db == nil {
+		return nil
+	}
+
+	return db.New()
+}
+
+func Close() (err error) {
+	if db != nil {
+		defer func() {
+			if err == nil {
+				// if successfully closed, clear dangling pointer
+				db = nil
+			}
+		}()
+		return db.Close()
+	}
+
+	// omit if db is not in open
+	return nil
+}
 `
 )
