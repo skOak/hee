@@ -451,9 +451,13 @@ func (mysqlDB *MysqlDB) GetColumns(db *sql.DB, table *Table, blackList map[strin
 		if err != nil {
 			beeLogger.Log.Fatalf("%s", err)
 		}
+		if colName == "is_deleted" {
+			// 如果存在该列，则会记录需要用这个字段来代表删除动作
+			table.IdDelete = true
+		}
 		if isSQLSignedIntType(dataType) {
 			sign := extractIntSignness(columnType)
-			if sign == "unsigned" && extra != "auto_increment" {
+			if sign == "unsigned" {
 				col.Type, err = mysqlDB.GetGoDataType(dataType + " " + sign)
 				if err != nil {
 					beeLogger.Log.Fatalf("%s", err)
@@ -1097,7 +1101,7 @@ func Get{{modelName}}ById(id {{pkType}}) (v *{{modelName}}, err error) {
 
 // Search{{modelName}}s retrieves all {{modelName}}(not deleted recoreds) matches certain condition. Returns empty list if
 // no records exist
-func Search{{modelName}}s(query, order string, offset, limit uint64, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
+func Search{{modelName}}s(order string, offset, limit uint64, query string, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
 	{{if .IdDelete}}if query != "" {
 		query += " and is_delete = 0"
 	} else {
