@@ -809,14 +809,14 @@ func writeModelFiles(dbms string, tables []*Table, mPath string, selectedTables 
 		fileStr = strings.Replace(fileStr, "{{pkType}}", tb.PkType, -1)
 
 		// If table contains time field, import time.Time package
-		timePkg := ""
-		importTimePkg := ""
-		if tb.ImportTimePkg {
-			timePkg = "\"time\"\n"
-			importTimePkg = "import \"time\"\n"
-		}
-		fileStr = strings.Replace(fileStr, "{{timePkg}}", timePkg, -1)
-		fileStr = strings.Replace(fileStr, "{{importTimePkg}}", importTimePkg, -1)
+		//timePkg := ""
+		//importTimePkg := ""
+		//if tb.ImportTimePkg {
+		//	timePkg = "\"time\"\n"
+		//	importTimePkg = "import \"time\"\n"
+		//}
+		//fileStr = strings.Replace(fileStr, "{{timePkg}}", timePkg, -1)
+		//fileStr = strings.Replace(fileStr, "{{importTimePkg}}", importTimePkg, -1)
 		//if _, err := f.WriteString(fileStr); err != nil {
 		//	beeLogger.Log.Fatalf("Could not write model file to '%s': %s", fpath, err)
 		//}
@@ -824,7 +824,7 @@ func writeModelFiles(dbms string, tables []*Table, mPath string, selectedTables 
 		if err != nil {
 			beeLogger.Log.Fatalf("new template fileStr failed <%s>", err)
 		}
-		err = t.Execute(f, &struct{ IdDelete bool }{tb.IdDelete})
+		err = t.Execute(f, tb)
 		if err != nil {
 			beeLogger.Log.Fatalf("execute template fileStr failed <%s>", err)
 			f.Truncate(0)
@@ -857,19 +857,23 @@ func writeModelFiles(dbms string, tables []*Table, mPath string, selectedTables 
 			return
 		}
 	}
-	defer utils.CloseFile(f)
 
 	t, err := template.New("").Parse(ModelsTPL)
 	if err != nil {
 		beeLogger.Log.Fatalf("template ModelsTPL faield <%s>", err)
+		utils.CloseFile(f)
 		return
 	}
 	err = t.Execute(f, &struct{ Dialect string }{dbms})
 	if err != nil {
 		beeLogger.Log.Fatalf("template ModelsTPL faield <%s>", err)
 		f.Truncate(0)
+		utils.CloseFile(f)
 		return
 	}
+	utils.CloseFile(f)
+	fmt.Fprintf(w, "\t%s%screate%s\t %s%s\n", "\x1b[32m", "\x1b[1m", "\x1b[21m", fpath, "\x1b[0m")
+	utils.FormatSourceCode(fpath)
 }
 
 // writeControllerFiles generates controller files
@@ -1065,15 +1069,20 @@ func getPackagePath(curpath string) (packpath string) {
 
 const (
 	StructModelTPL = `package models
-{{importTimePkg}}
+{{if .ImportTimePkg}}
+import (
+	"time"
+)
+{{end}}
 {{modelStruct}}
 `
 
 	ModelTPL = `package models
-
+{{if .ImportTimePkg}}
 import (
-	{{timePkg}}
+	"time"
 )
+{{end}}
 
 {{modelStruct}}
 
@@ -1126,6 +1135,17 @@ func Search{{modelName}}s(order string, offset, limit uint64, query string, quer
 // the record to be updated doesn't exist
 func Update{{modelName}}ById(m *{{modelName}}) (err error) {
 	return DB().Save(m).Error
+}
+
+// BatchUpdate{{modelName}}s updates all qualified {{modelName}}s
+// return the record number affected and error
+func BatchUpdate{{modelName}}s(kvs map[string]interface{}, query string, queryArgs ...interface{}) (affected int64, err error) {
+	if len(kvs) == 0 || query == "" {
+		// nothing to update, omit
+		return
+	}
+	ret := DB().Table("{{modelName}}").Where(query, queryArgs).Updates(kvs)
+	return ret.RowsAffected, ret.Error
 }
 
 // Delete{{modelName}} deletes {{modelName}}(set IsDeleted to 1) by Id and returns error if
@@ -1343,24 +1363,32 @@ func init() {
 		),
 `
 
-	ModelsTPL = `
-package models
+	ModelsTPL = `package models
 
 import (
+	"errors"
 	"strings"
+	"sync"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/{{.Dialect}}"
 )
 
+var once sync.Once // protects the following db to be initialized once
 var db *gorm.DB
 
 func Open(dialect, connStr string) (err error) {
-	{{if eq .Dialect "mysql"}}if !strings.Contains(connStr, "parseTime") {
-		// 对MySQL的特殊处理
-		connStr += "&parseTime=True"
-	}{{end}}
-	db, err = gorm.Open("{{.Dialect}}", connStr)
+	if db != nil {
+		return errors.New("db already opened")
+	}
+
+	once.Do(func() {
+		{{if eq .Dialect "mysql"}}if !strings.Contains(connStr, "parseTime") {
+			// 对MySQL的特殊处理
+			connStr += "&parseTime=True"
+		}{{end}}
+		db, err = gorm.Open("{{.Dialect}}", connStr)
+	})
 	return
 }
 
