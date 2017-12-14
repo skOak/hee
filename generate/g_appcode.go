@@ -1383,8 +1383,11 @@ func Open(dialect, connStr string) (err error) {
 	}
 
 	once.Do(func() {
-		{{if eq .Dialect "mysql"}}if !strings.Contains(connStr, "parseTime") {
-			// 对MySQL的特殊处理
+		{{if eq .Dialect "mysql"}}// 对MySQL的特殊处理
+		if !strings.Contains(connStr, "?") {
+			connStr += "?parseTime=True"
+		}
+		if !strings.Contains(connStr, "parseTime") {
 			connStr += "&parseTime=True"
 		}{{end}}
 		db, err = gorm.Open("{{.Dialect}}", connStr)
