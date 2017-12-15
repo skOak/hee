@@ -24,6 +24,7 @@ import (
 	"github.com/skOak/hee/generate/swaggergen"
 	"github.com/skOak/hee/logger"
 	"github.com/skOak/hee/utils"
+	"path/filepath"
 )
 
 var CmdGenerate = &commands.Command{
@@ -51,7 +52,7 @@ var CmdGenerate = &commands.Command{
 
   ▶ {{"To generate swagger doc file:"|bold}}
 
-     $ bee generate docs [-downdoc=true]
+     $ bee generate docs [-downdoc=true] [-path=destination path(relative or abs path)]
 
   ▶ {{"To generate a test case:"|bold}}
 
@@ -72,6 +73,7 @@ func init() {
 	CmdGenerate.Flag.Var(&generate.Level, "level", "Either 1, 2 or 3. i.e. 1=models; 2=models and controllers; 3=models, controllers and routers.")
 	CmdGenerate.Flag.Var(&generate.Fields, "fields", "List of table Fields.")
 	CmdGenerate.Flag.Var(&generate.DDL, "ddl", "Generate DDL Migration")
+	CmdGenerate.Flag.Var(&generate.Path, "path", "path of the generate destination")
 	CmdGenerate.Flag.BoolVar(&generate.DownSwagger, "downdoc", false, "Enable auto-download of the swagger file if it does not exist.")
 	commands.AvailableCommands = append(commands.AvailableCommands, CmdGenerate)
 }
@@ -97,7 +99,11 @@ func GenerateCode(cmd *commands.Command, args []string) int {
 		scaffold(cmd, args, currpath)
 	case "docs":
 		cmd.Flag.Parse(args[1:])
-		swaggergen.GenerateDocs(currpath, generate.DownSwagger)
+		dstPath := currpath
+		if generate.Path.String() != "" {
+			dstPath, _ = filepath.Abs(generate.Path.String())
+		}
+		swaggergen.GenerateDocs(currpath, generate.DownSwagger, dstPath)
 	case "appcode":
 		appCode(cmd, args, currpath)
 	case "migration":

@@ -160,7 +160,7 @@ func parsePackageFromDir(path string) error {
 	return nil
 }
 
-func GenerateDocs(curpath string, downdoc bool) {
+func GenerateDocs(curpath string, downdoc bool, dstPath string) {
 	fset := token.NewFileSet()
 
 	f, err := parser.ParseFile(fset, filepath.Join(curpath, "service/router.go"), nil, parser.ParseComments)
@@ -338,12 +338,12 @@ func GenerateDocs(curpath string, downdoc bool) {
 			}
 		}
 	}
-	os.Mkdir(path.Join(curpath, "swagger"), 0755)
-	fd, err := os.Create(path.Join(curpath, "swagger", "swagger.json"))
+	os.Mkdir(path.Join(dstPath, "swagger"), 0755)
+	fd, err := os.Create(path.Join(dstPath, "swagger", "swagger.json"))
 	if err != nil {
 		panic(err)
 	}
-	fdyml, err := os.Create(path.Join(curpath, "swagger", "swagger.yml"))
+	fdyml, err := os.Create(path.Join(dstPath, "swagger", "swagger.yml"))
 	if err != nil {
 		panic(err)
 	}
@@ -361,8 +361,9 @@ func GenerateDocs(curpath string, downdoc bool) {
 	}
 
 	if downdoc {
-		if _, err := os.Stat(path.Join(curpath, "swagger", "index.html")); err != nil {
+		if _, err := os.Stat(path.Join(dstPath, "swagger", "index.html")); err != nil {
 			if os.IsNotExist(err) {
+				os.Chdir(dstPath)
 				bu.DownloadFromURL(bu.Swaggerlink, "swagger.zip")
 				beeLogger.Log.Warnf("unzipAndDelete:%v", bu.UnzipAndDelete("swagger.zip"))
 			}
