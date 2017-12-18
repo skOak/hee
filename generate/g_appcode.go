@@ -1112,9 +1112,9 @@ func Get{{modelName}}ById(id {{pkType}}) (v *{{modelName}}, err error) {
 // no records exist
 func Search{{modelName}}s(order string, offset, limit uint64, query string, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
 	{{if .IdDelete}}if query != "" {
-		query += " and is_delete = 0"
+		query += " and is_deleted = 0"
 	} else {
-		query = "is_delete = 0"
+		query = "is_deleted = 0"
 	}{{end}}
 	qs := DB().Where(query, queryArgs...)
 	if order != "" {
