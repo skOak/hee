@@ -1078,11 +1078,13 @@ import (
 `
 
 	ModelTPL = `package models
-{{if .ImportTimePkg}}
 import (
+{{if .ImportTimePkg}}
 	"time"
-)
+
 {{end}}
+	"github.com/jinzhu/gorm"
+)
 
 {{modelStruct}}
 
@@ -1092,8 +1094,12 @@ func ({{modelName}}) TableName() string {
 
 // Add{{modelName}} insert a new {{modelName}} into database and returns
 // last inserted Id on success.
-func Add{{modelName}}(m *{{modelName}}) (id {{pkType}}, err error) {
-	err = DB().Create(m).Error
+func Add{{modelName}}(tx *gorm.DB, m *{{modelName}}) (id {{pkType}}, err error) {
+    if tx != nil {
+	    err = tx.Create(m).Error
+	} else {
+	    err = DB().Create(m).Error
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -1133,30 +1139,46 @@ func Search{{modelName}}s(order string, offset, limit uint64, query string, quer
 
 // Update{{modelName}} updates {{modelName}}(all changed fields) by Id and returns error if
 // the record to be updated doesn't exist
-func Update{{modelName}}ById(m *{{modelName}}) (err error) {
+func Update{{modelName}}ById(tx *gorm.DB, m *{{modelName}}) (err error) {
+    if tx != nil {
+	    return tx.Save(m).Error
+	}
 	return DB().Save(m).Error
 }
 
 // BatchUpdate{{modelName}}s updates all qualified {{modelName}}s
 // return the record number affected and error
-func BatchUpdate{{modelName}}s(kvs map[string]interface{}, query string, queryArgs ...interface{}) (affected int64, err error) {
+func BatchUpdate{{modelName}}s(tx *gorm.DB, kvs map[string]interface{}, query string, queryArgs ...interface{}) (affected int64, err error) {
 	if len(kvs) == 0 || query == "" {
 		// nothing to update, omit
 		return
 	}
-	ret := DB().Table("{{modelName}}").Where(query, queryArgs).Updates(kvs)
+	var ret *gorm.DB
+	if tx != nil {
+	    ret = DB().Table("{{modelName}}").Where(query, queryArgs).Updates(kvs)
+	} else {
+	    ret = DB().Table("{{modelName}}").Where(query, queryArgs).Updates(kvs)
+	}
 	return ret.RowsAffected, ret.Error
 }
 
 // Delete{{modelName}} deletes {{modelName}}(set IsDeleted to 1) by Id and returns error if
 // the record to be deleted doesn't exist
-func Delete{{modelName}}(id {{pkType}}) (err error) {
+func Delete{{modelName}}(tx *gorm.DB, id {{pkType}}) (err error) {
 	// ascertain id exists in the database
 	v := {{modelName}}{Id: id}
-	if err = DB().First(&v).Error; err == nil {
-		{{if .IdDelete}}v.IsDeleted = 1
-		return DB().Save(&v).Error
-		{{else}}return DB().Delete(&v).Error{{end}}
+	if tx != nil {
+    	if err = tx.First(&v).Error; err == nil {
+    		{{if .IdDelete}}v.IsDeleted = 1
+    		return tx.Save(&v).Error
+    		{{else}}return tx.Delete(&v).Error{{end}}
+    	}
+	} else {
+    	if err = DB().First(&v).Error; err == nil {
+    		{{if .IdDelete}}v.IsDeleted = 1
+    		return DB().Save(&v).Error
+    		{{else}}return DB().Delete(&v).Error{{end}}
+    	}
 	}
 	return
 }
