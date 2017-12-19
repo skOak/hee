@@ -1399,7 +1399,7 @@ import (
 var once sync.Once // protects the following db to be initialized once
 var db *gorm.DB
 
-func Open(dialect, connStr string) (err error) {
+func Open(dialect, connStr string, logDetail bool) (err error) {
 	if db != nil {
 		return errors.New("db already opened")
 	}
@@ -1414,6 +1414,7 @@ func Open(dialect, connStr string) (err error) {
 		}{{end}}
 		db, err = gorm.Open("{{.Dialect}}", connStr)
 	})
+    db.LogMode(logDetail)
 	return
 }
 
