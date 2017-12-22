@@ -1136,6 +1136,17 @@ func Search{{modelName}}s(order string, offset, limit uint64, query string, quer
 	err = qs.Find(&ml).Error
 	return
 }
+// Count{{modelName}}s retrieves count of all {{modelName}}(not deleted recoreds) matches certain condition. Returns 0 if
+// no records exist
+func Count{{modelName}}s(query string, queryArgs ...interface{}) (count int64, err error) {
+	{{if .IdDelete}}if query != "" {
+		query += " and is_deleted = 0"
+	} else {
+		query = "is_deleted = 0"
+	}{{end}}
+	err = DB().Model(&{{modelName}}{}).Where(query, queryArgs...).Count(&count).Error
+	return
+}
 
 // Update{{modelName}} updates {{modelName}}(all changed fields) by Id and returns error if
 // the record to be updated doesn't exist
@@ -1155,9 +1166,9 @@ func BatchUpdate{{modelName}}s(tx *gorm.DB, kvs map[string]interface{}, query st
 	}
 	var ret *gorm.DB
 	if tx != nil {
-	    ret = DB().Table("{{modelName}}").Where(query, queryArgs).Updates(kvs)
+	    ret = tx.Table("{{modelName}}").Where(query, queryArgs...).Updates(kvs)
 	} else {
-	    ret = DB().Table("{{modelName}}").Where(query, queryArgs).Updates(kvs)
+	    ret = DB().Table("{{modelName}}").Where(query, queryArgs...).Updates(kvs)
 	}
 	return ret.RowsAffected, ret.Error
 }
