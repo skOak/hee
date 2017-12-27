@@ -1095,34 +1095,67 @@ func ({{modelName}}) TableName() string {
 // Add{{modelName}} insert a new {{modelName}} into database and returns
 // last inserted Id on success.
 func Add{{modelName}}(tx *gorm.DB, m *{{modelName}}) (id {{pkType}}, err error) {
-    if tx != nil {
-	    err = tx.Create(m).Error
-	} else {
-	    err = DB().Create(m).Error
-	}
+    db := tx
+    if db == nil {
+        db = DB()
+    }
+	err = db.Create(m).Error
 	if err != nil {
 		return 0, err
 	}
 	return m.Id, nil
 }
 
-// Get{{modelName}}ById retrieves {{modelName}} by Id. Returns error if
+{{if .IdDelete}}
+// Get{{modelName}}ById retrieves {{modelName}} by Id(not deleted). Returns error if
 // Id doesn't exist
-func Get{{modelName}}ById(id {{pkType}}) (v *{{modelName}}, err error) {
+func Get{{modelName}}ById(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err error) {
+	db := tx
+	if db == nil {
+		db = DB()
+	}
 	v = &{{modelName}}{Id: id}
-	err = DB().First(v).Error
+	err = db.Where("is_deleted=?", 0).First(v).Error
 	return
 }
 
+// Get{{modelName}}ById retrieves {{modelName}} by Id(including deleted). Returns error if
+// Id doesn't exist
+func Get{{modelName}}ByIdIncludingDeleted(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err error) {
+	db := tx
+	if db == nil {
+		db = DB()
+	}
+	v = &{{modelName}}{Id: id}
+	err = db.First(v).Error
+	return
+}
+{{else}}
+// Get{{modelName}}ById retrieves {{modelName}} by Id. Returns error if
+// Id doesn't exist
+func Get{{modelName}}ById(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err error) {
+    db := tx
+    if db == nil {
+        db = DB() }
+	v = &{{modelName}}{Id: id}
+	err = db.First(v).Error
+	return
+}
+{{end}}
+
 // Search{{modelName}}s retrieves all {{modelName}}(not deleted recoreds) matches certain condition. Returns empty list if
 // no records exist
-func Search{{modelName}}s(order string, offset, limit uint64, query string, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
+func Search{{modelName}}s(tx *gorm.DB, order string, offset, limit uint64, query string, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
 	{{if .IdDelete}}if query != "" {
 		query += " and is_deleted = 0"
 	} else {
 		query = "is_deleted = 0"
-	}{{end}}
-	qs := DB().Where(query, queryArgs...)
+	}
+	{{end}}db := tx
+    if db == nil {
+        db = DB()
+    }
+	qs := db.Where(query, queryArgs...)
 	if order != "" {
 		qs = qs.Order(order)
 	}
@@ -1138,23 +1171,28 @@ func Search{{modelName}}s(order string, offset, limit uint64, query string, quer
 }
 // Count{{modelName}}s retrieves count of all {{modelName}}(not deleted recoreds) matches certain condition. Returns 0 if
 // no records exist
-func Count{{modelName}}s(query string, queryArgs ...interface{}) (count int64, err error) {
+func Count{{modelName}}s(tx *gorm.DB, query string, queryArgs ...interface{}) (count int64, err error) {
 	{{if .IdDelete}}if query != "" {
 		query += " and is_deleted = 0"
 	} else {
 		query = "is_deleted = 0"
-	}{{end}}
-	err = DB().Model(&{{modelName}}{}).Where(query, queryArgs...).Count(&count).Error
+	}
+	{{end}}db := tx
+    if db == nil {
+        db = DB()
+    }
+	err = db.Model(&{{modelName}}{}).Where(query, queryArgs...).Count(&count).Error
 	return
 }
 
 // Update{{modelName}} updates {{modelName}}(all changed fields) by Id and returns error if
 // the record to be updated doesn't exist
 func Update{{modelName}}ById(tx *gorm.DB, m *{{modelName}}) (err error) {
-    if tx != nil {
-	    return tx.Save(m).Error
-	}
-	return DB().Save(m).Error
+    db := tx
+    if db == nil {
+        db = DB()
+    }
+	return db.Save(m).Error
 }
 
 // BatchUpdate{{modelName}}s updates all qualified {{modelName}}s
@@ -1164,12 +1202,11 @@ func BatchUpdate{{modelName}}s(tx *gorm.DB, kvs map[string]interface{}, query st
 		// nothing to update, omit
 		return
 	}
-	var ret *gorm.DB
-	if tx != nil {
-	    ret = tx.Table("{{modelName}}").Where(query, queryArgs...).Updates(kvs)
-	} else {
-	    ret = DB().Table("{{modelName}}").Where(query, queryArgs...).Updates(kvs)
-	}
+    db := tx
+    if db == nil {
+        db = DB()
+    }
+	ret := db.Table("{{.Name}}").Where(query, queryArgs...).Updates(kvs)
 	return ret.RowsAffected, ret.Error
 }
 
@@ -1177,20 +1214,16 @@ func BatchUpdate{{modelName}}s(tx *gorm.DB, kvs map[string]interface{}, query st
 // the record to be deleted doesn't exist
 func Delete{{modelName}}(tx *gorm.DB, id {{pkType}}) (err error) {
 	// ascertain id exists in the database
+    db := tx
+    if db == nil {
+        db = DB()
+    }
 	v := {{modelName}}{Id: id}
-	if tx != nil {
-    	if err = tx.First(&v).Error; err == nil {
-    		{{if .IdDelete}}v.IsDeleted = 1
-    		return tx.Save(&v).Error
-    		{{else}}return tx.Delete(&v).Error{{end}}
-    	}
-	} else {
-    	if err = DB().First(&v).Error; err == nil {
-    		{{if .IdDelete}}v.IsDeleted = 1
-    		return DB().Save(&v).Error
-    		{{else}}return DB().Delete(&v).Error{{end}}
-    	}
-	}
+    if err = db.First(&v).Error; err == nil {
+        {{if .IdDelete}}v.IsDeleted = 1
+        return db.Save(&v).Error
+        {{else}}return db.Delete(&v).Error{{end}}
+    }
 	return
 }
 `
@@ -1422,6 +1455,12 @@ func Open(dialect, connStr string, logDetail bool) (err error) {
 		}
 		if !strings.Contains(connStr, "parseTime") {
 			connStr += "&parseTime=True"
+		}
+		if !strings.Contains(connStr, "loc") {
+			connStr += "&loc=Local"
+		}
+		if !strings.Contains(connStr, "charset") {
+			connStr += "&charset=utf8mb4"
 		}{{end}}
 		db, err = gorm.Open("{{.Dialect}}", connStr)
 	})
