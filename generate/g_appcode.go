@@ -1078,13 +1078,11 @@ import (
 `
 
 	ModelTPL = `package models
-import (
 {{if .ImportTimePkg}}
+import (
 	"time"
-
-{{end}}
-	"github.com/jinzhu/gorm"
 )
+{{end}}
 
 {{modelStruct}}
 
@@ -1094,7 +1092,7 @@ func ({{modelName}}) TableName() string {
 
 // Add{{modelName}} insert a new {{modelName}} into database and returns
 // last inserted Id on success.
-func Add{{modelName}}(tx *gorm.DB, m *{{modelName}}) (id {{pkType}}, err error) {
+func Add{{modelName}}(tx *MDB, m *{{modelName}}) (id {{pkType}}, err error) {
     db := tx
     if db == nil {
         db = DB()
@@ -1109,7 +1107,7 @@ func Add{{modelName}}(tx *gorm.DB, m *{{modelName}}) (id {{pkType}}, err error) 
 {{if .IdDelete}}
 // Get{{modelName}}ById retrieves {{modelName}} by Id(not deleted). Returns error if
 // Id doesn't exist
-func Get{{modelName}}ById(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err error) {
+func Get{{modelName}}ById(tx *MDB, id {{pkType}}) (v *{{modelName}}, err error) {
 	db := tx
 	if db == nil {
 		db = DB()
@@ -1121,7 +1119,7 @@ func Get{{modelName}}ById(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err err
 
 // Get{{modelName}}ById retrieves {{modelName}} by Id(including deleted). Returns error if
 // Id doesn't exist
-func Get{{modelName}}ByIdIncludingDeleted(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err error) {
+func Get{{modelName}}ByIdIncludingDeleted(tx *MDB, id {{pkType}}) (v *{{modelName}}, err error) {
 	db := tx
 	if db == nil {
 		db = DB()
@@ -1133,7 +1131,7 @@ func Get{{modelName}}ByIdIncludingDeleted(tx *gorm.DB, id {{pkType}}) (v *{{mode
 {{else}}
 // Get{{modelName}}ById retrieves {{modelName}} by Id. Returns error if
 // Id doesn't exist
-func Get{{modelName}}ById(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err error) {
+func Get{{modelName}}ById(tx *MDB, id {{pkType}}) (v *{{modelName}}, err error) {
     db := tx
     if db == nil {
         db = DB() }
@@ -1145,7 +1143,7 @@ func Get{{modelName}}ById(tx *gorm.DB, id {{pkType}}) (v *{{modelName}}, err err
 
 // Search{{modelName}}s retrieves all {{modelName}}(not deleted recoreds) matches certain condition. Returns empty list if
 // no records exist
-func Search{{modelName}}s(tx *gorm.DB, order string, offset, limit uint64, query string, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
+func Search{{modelName}}s(tx *MDB, order string, offset, limit uint64, query string, queryArgs ...interface{}) (ml []*{{modelName}}, err error) {
 	{{if .IdDelete}}if query != "" {
 		query += " and is_deleted = 0"
 	} else {
@@ -1171,7 +1169,7 @@ func Search{{modelName}}s(tx *gorm.DB, order string, offset, limit uint64, query
 }
 // Count{{modelName}}s retrieves count of all {{modelName}}(not deleted recoreds) matches certain condition. Returns 0 if
 // no records exist
-func Count{{modelName}}s(tx *gorm.DB, query string, queryArgs ...interface{}) (count int64, err error) {
+func Count{{modelName}}s(tx *MDB, query string, queryArgs ...interface{}) (count int64, err error) {
 	{{if .IdDelete}}if query != "" {
 		query += " and is_deleted = 0"
 	} else {
@@ -1187,7 +1185,7 @@ func Count{{modelName}}s(tx *gorm.DB, query string, queryArgs ...interface{}) (c
 
 // Update{{modelName}} updates {{modelName}}(all changed fields) by Id and returns error if
 // the record to be updated doesn't exist
-func Update{{modelName}}ById(tx *gorm.DB, m *{{modelName}}) (err error) {
+func Update{{modelName}}ById(tx *MDB, m *{{modelName}}) (err error) {
     db := tx
     if db == nil {
         db = DB()
@@ -1197,7 +1195,7 @@ func Update{{modelName}}ById(tx *gorm.DB, m *{{modelName}}) (err error) {
 
 // BatchUpdate{{modelName}}s updates all qualified {{modelName}}s
 // return the record number affected and error
-func BatchUpdate{{modelName}}s(tx *gorm.DB, kvs map[string]interface{}, query string, queryArgs ...interface{}) (affected int64, err error) {
+func BatchUpdate{{modelName}}s(tx *MDB, kvs map[string]interface{}, query string, queryArgs ...interface{}) (affected int64, err error) {
 	if len(kvs) == 0 || query == "" {
 		// nothing to update, omit
 		return
@@ -1212,7 +1210,7 @@ func BatchUpdate{{modelName}}s(tx *gorm.DB, kvs map[string]interface{}, query st
 
 // Delete{{modelName}} deletes {{modelName}}(set IsDeleted to 1) by Id and returns error if
 // the record to be deleted doesn't exist
-func Delete{{modelName}}(tx *gorm.DB, id {{pkType}}) (err error) {
+func Delete{{modelName}}(tx *MDB, id {{pkType}}) (err error) {
 	// ascertain id exists in the database
     db := tx
     if db == nil {
@@ -1435,15 +1433,131 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/{{.Dialect}}"
 )
 
-var once sync.Once // protects the following db to be initialized once
-var db *gorm.DB
 
-func Open(dialect, connStr string, logDetail bool) (err error) {
+type Logger interface {
+	Info(args ...interface{})
+	Infof(format string, args ...interface{})
+	Error(args ...interface{})
+	Errorf(format string, args ...interface{})
+}
+
+type MDB struct {
+	*gorm.DB
+	wg       *sync.WaitGroup
+	success  *int32
+	finished *int32
+}
+
+func (m *MDB) Begin(l Logger) *MDB {
+	if m == nil {
+		return nil
+	}
+
+	tx := m.DB.Begin()
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	var success, finished int32
+	l.Info("transaction begin:", tx.Error)
+	return &MDB{
+		DB:       tx,
+		wg:       wg,
+		success:  &success,
+		finished: &finished,
+	}
+}
+func (m *MDB) Commit(l Logger) *MDB {
+	if m == nil || m.wg == nil {
+		return m
+	}
+	tx := m.DB.Commit()
+	m.wg.Done()
+	atomic.StoreInt32(m.success, 1)
+	atomic.StoreInt32(m.finished, 1)
+	l.Info("transaction commit:", tx.Error)
+	return &MDB{
+		DB:       tx,
+		wg:       m.wg,
+		success:  m.success,
+		finished: m.finished,
+	}
+}
+func (m *MDB) Rollback(l Logger) *MDB {
+	if m == nil || m.wg == nil {
+		return m
+	}
+	tx := m.DB.Rollback()
+	m.wg.Done()
+	atomic.StoreInt32(m.success, 0)
+	atomic.StoreInt32(m.finished, 1)
+	l.Info("transaction rollback:", tx.Error)
+	return &MDB{
+		DB:       tx,
+		wg:       m.wg,
+		success:  m.success,
+		finished: m.finished,
+	}
+}
+func (m *MDB) Finish(l Logger, err error) *MDB {
+	if m == nil || m.wg == nil {
+		return m
+	}
+	var tx *gorm.DB
+	if err == nil {
+		tx = m.DB.Commit()
+		m.wg.Done()
+		atomic.StoreInt32(m.success, 1)
+		l.Infof("transaction commit:<%v>", tx.Error)
+	} else {
+		tx = m.DB.Rollback()
+		m.wg.Done()
+		atomic.StoreInt32(m.success, 0)
+		l.Infof("transaction rollback:<%v> cause error<%v>", tx.Error, err.Error())
+	}
+	atomic.StoreInt32(m.finished, 1)
+	return &MDB{
+		DB:       tx,
+		wg:       m.wg,
+		success:  m.success,
+		finished: m.finished,
+	}
+}
+func (m *MDB) Table(name string) *MDB {
+	return &MDB{
+		DB:       m.DB.Table(name),
+		wg:       m.wg,
+		success:  m.success,
+		finished: m.finished,
+	}
+}
+func (m *MDB) Success() bool {
+	if m == nil || m.success == nil {
+		return true // 非事务DB，默认success为true
+	}
+	return atomic.LoadInt32(m.success) == 1
+}
+func (m *MDB) Finished() bool {
+	if m == nil || m.finished == nil {
+		return true // 非事务DB，默认finished为true
+	}
+	return atomic.LoadInt32(m.finished) == 1
+}
+func (m *MDB) WaitFinish() {
+	if m == nil || m.wg == nil {
+		return
+	}
+	m.wg.Wait()
+}
+
+var once sync.Once // protects the following db to be initialized once
+var db *MDB
+
+func Open(dialect, connStr string, logDetail bool, maxOpen, maxIdle int) (err error) {
 	if db != nil {
 		return errors.New("db already opened")
 	}
@@ -1461,19 +1575,36 @@ func Open(dialect, connStr string, logDetail bool) (err error) {
 		}
 		if !strings.Contains(connStr, "charset") {
 			connStr += "&charset=utf8mb4"
+		}
+		db = &MDB{}
+		db.DB, err = gorm.Open("mysql", connStr)
+		if err != nil {
+			return
+		}
+		if maxOpen > 0 {
+			db.DB.DB().SetMaxOpenConns(maxOpen)
+		}
+		if maxIdle > 0 {
+			db.DB.DB().SetMaxIdleConns(maxIdle)
+		}{{else}}
+		db = &MDB{}
+		db.DB, err = gorm.Open("{{.Dialect}}", connStr)
+		if err != nil {
+			return
 		}{{end}}
-		db, err = gorm.Open("{{.Dialect}}", connStr)
 	})
     db.LogMode(logDetail)
 	return
 }
 
-func DB() *gorm.DB {
+func DB() *MDB {
 	if db == nil {
 		return nil
 	}
 
-	return db.New()
+	return &MDB{
+		DB: db.DB.New(),
+	}
 }
 
 func Close() (err error) {
@@ -1489,6 +1620,14 @@ func Close() (err error) {
 
 	// omit if db is not in open
 	return nil
+}
+
+func Begin(l Logger) *MDB {
+	if db == nil {
+		return nil
+	}
+
+	return db.Begin(l)
 }
 `
 )
