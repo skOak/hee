@@ -1204,7 +1204,8 @@ func BatchUpdate{{modelName}}s(tx *MDB, kvs map[string]interface{}, query string
     if db == nil {
         db = DB()
     }
-	ret := db.Table("{{.Name}}").Where(query, queryArgs...).Updates(kvs)
+    var nil{{modelName}} *{{modelName}}
+	ret := db.Table(nil{{modelName}}.TableName()).Where(query, queryArgs...).Updates(kvs)
 	return ret.RowsAffected, ret.Error
 }
 
