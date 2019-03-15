@@ -1086,7 +1086,7 @@ import (
 
 {{modelStruct}}
 
-func ({{modelName}}) TableName() string {
+func (*{{modelName}}) TableName() string {
 	return "{{tableName}}"
 }
 
