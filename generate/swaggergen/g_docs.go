@@ -915,7 +915,16 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 					opts.Security = make([]map[string][]string, 0)
 				}
 				opts.Security = append(opts.Security, getSecurity(t))
+			} else if strings.HasPrefix(t, "@Author") {
+				opts.Author = strings.Split(strings.TrimSpace(strings.TrimSpace(t[len("@Author"):])), ",")
 			}
+		}
+
+		if len(opts.Author) > 0 {
+			for i := range opts.Author {
+				opts.Author[i] = "@" + opts.Author[i]
+			}
+			opts.Description = fmt.Sprintf("[%v]%v", strings.Join(opts.Author, ";"), opts.Description)
 		}
 	}
 

@@ -1090,12 +1090,26 @@ func (*{{modelName}}) TableName() string {
 	return "{{tableName}}"
 }
 
+func (*{{modelName}}) DBSource() string {
+	return DefaultDBSource
+}
+
+var nil{{modelName}} *{{modelName}}
+
 // Add{{modelName}} insert a new {{modelName}} into database and returns
 // last inserted Id on success.
 func Add{{modelName}}(tx *MDB, m *{{modelName}}) (id {{pkType}}, err error) {
     db := tx
     if db == nil {
-        db = DB()
+		db = RWDBX(m.DBSource())
+	}
+	if db.DBSource() != m.DBSource() {
+		err = ErrWrongDBSource
+		return
+	}
+	if db.IsReadOnly() {
+		err = ErrReadOnlyDB
+		return
     }
 	err = db.Create(m).Error
 	if err != nil {
@@ -1110,7 +1124,11 @@ func Add{{modelName}}(tx *MDB, m *{{modelName}}) (id {{pkType}}, err error) {
 func Get{{modelName}}ById(tx *MDB, id {{pkType}}) (v *{{modelName}}, err error) {
 	db := tx
 	if db == nil {
-		db = DB()
+		db = RODBX(v.DBSource())
+	}
+	if db.DBSource() != v.DBSource() {
+		err = ErrWrongDBSource
+		return
 	}
 	v = &{{modelName}}{Id: id}
 	err = db.Where("is_deleted=?", 0).First(v).Error
@@ -1122,7 +1140,11 @@ func Get{{modelName}}ById(tx *MDB, id {{pkType}}) (v *{{modelName}}, err error) 
 func Get{{modelName}}ByIdIncludingDeleted(tx *MDB, id {{pkType}}) (v *{{modelName}}, err error) {
 	db := tx
 	if db == nil {
-		db = DB()
+		db = RODBX(v.DBSource())
+	}
+	if db.DBSource() != v.DBSource() {
+		err = ErrWrongDBSource
+		return
 	}
 	v = &{{modelName}}{Id: id}
 	err = db.First(v).Error
@@ -1134,7 +1156,12 @@ func Get{{modelName}}ByIdIncludingDeleted(tx *MDB, id {{pkType}}) (v *{{modelNam
 func Get{{modelName}}ById(tx *MDB, id {{pkType}}) (v *{{modelName}}, err error) {
     db := tx
     if db == nil {
-        db = DB() }
+		db = RODBX(v.DBSource())
+	}
+	if db.DBSource() != v.DBSource() {
+		err = ErrWrongDBSource
+		return
+    }
 	v = &{{modelName}}{Id: id}
 	err = db.First(v).Error
 	return
@@ -1151,7 +1178,11 @@ func Search{{modelName}}s(tx *MDB, order string, offset, limit uint64, query str
 	}
 	{{end}}db := tx
     if db == nil {
-        db = DB()
+		db = RODBX(nil{{modelName}}.DBSource())
+	}
+	if db.DBSource() != nil{{modelName}}.DBSource() {
+		err = ErrWrongDBSource
+		return
     }
 	qs := db.Where(query, queryArgs...)
 	if order != "" {
@@ -1177,7 +1208,11 @@ func Count{{modelName}}s(tx *MDB, query string, queryArgs ...interface{}) (count
 	}
 	{{end}}db := tx
     if db == nil {
-        db = DB()
+		db = RODBX(nil{{modelName}}.DBSource())
+	}
+	if db.DBSource() != nil{{modelName}}.DBSource() {
+		err = ErrWrongDBSource
+		return
     }
 	err = db.Model(&{{modelName}}{}).Where(query, queryArgs...).Count(&count).Error
 	return
@@ -1188,7 +1223,15 @@ func Count{{modelName}}s(tx *MDB, query string, queryArgs ...interface{}) (count
 func Update{{modelName}}ById(tx *MDB, m *{{modelName}}) (err error) {
     db := tx
     if db == nil {
-        db = DB()
+		db = RWDBX(nil{{modelName}}.DBSource())
+	}
+	if db.DBSource() != nil{{modelName}}.DBSource() {
+		err = ErrWrongDBSource
+		return
+	}
+	if db.IsReadOnly() {
+		err = ErrReadOnlyDB
+		return
     }
 	return db.Save(m).Error
 }
@@ -1202,9 +1245,16 @@ func BatchUpdate{{modelName}}s(tx *MDB, kvs map[string]interface{}, query string
 	}
     db := tx
     if db == nil {
-        db = DB()
+		db = RWDBX(nil{{modelName}}.DBSource())
+	}
+	if db.DBSource() != nil{{modelName}}.DBSource() {
+		err = ErrWrongDBSource
+		return
+	}
+	if db.IsReadOnly() {
+		err = ErrReadOnlyDB
+		return
     }
-    var nil{{modelName}} *{{modelName}}
 	ret := db.Table(nil{{modelName}}.TableName()).Where(query, queryArgs...).Updates(kvs)
 	return ret.RowsAffected, ret.Error
 }
@@ -1215,7 +1265,15 @@ func Delete{{modelName}}(tx *MDB, id {{pkType}}) (err error) {
 	// ascertain id exists in the database
     db := tx
     if db == nil {
-        db = DB()
+		db = RWDBX(nil{{modelName}}.DBSource())
+	}
+	if db.DBSource() != nil{{modelName}}.DBSource() {
+		err = ErrWrongDBSource
+		return
+	}
+	if db.IsReadOnly() {
+		err = ErrReadOnlyDB
+		return
     }
 	v := {{modelName}}{Id: id}
     if err = db.First(&v).Error; err == nil {

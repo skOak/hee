@@ -178,6 +178,7 @@ type Operation struct {
 	Responses   map[string]Response   `json:"responses,omitempty" yaml:"responses,omitempty"`
 	Security    []map[string][]string `json:"security,omitempty" yaml:"security,omitempty"`
 	Deprecated  bool                  `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
+	Author      []string              `json:"-" yaml:"-"`
 }
 
 // not deep copy
