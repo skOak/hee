@@ -924,7 +924,7 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 			for i := range opts.Author {
 				opts.Author[i] = "@" + opts.Author[i]
 			}
-			opts.Description = fmt.Sprintf("[%v]%v", strings.Join(opts.Author, ";"), opts.Description)
+			opts.Description = fmt.Sprintf("[%v]%v", strings.Join(opts.Author, " "), opts.Description)
 		}
 	}
 
