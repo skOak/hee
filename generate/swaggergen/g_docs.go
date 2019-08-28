@@ -78,6 +78,7 @@ var basicTypes = map[string]string{
 	// builtin golang objects
 	"time.Time":       "string:string",
 	"json.RawMessage": "string:byte",
+	"interface{}":     "string:byte",
 }
 
 var stdlibObject = map[string]string{
@@ -763,13 +764,13 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 						schema.Type = typeFormat[0]
 						schema.Format = typeFormat[1]
 					} else {
-						m, mod, realTypes := getModel(schemaName)
+						m, mod, realTypes := getModel(pkgpath, controllerName, schemaName)
 						schema.Ref = "#/definitions/" + m
 						if _, ok := modelsList[pkgpath+controllerName]; !ok {
 							modelsList[pkgpath+controllerName] = make(map[string]Schema)
 						}
 						modelsList[pkgpath+controllerName][schemaName] = mod
-						appendModels(pkgpath, controllerName, realTypes)
+						appendModels(pkgpath, controllerName, realTypes, funcName)
 					}
 					if isArray {
 						rs.Schema = &Schema{
@@ -780,7 +781,7 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 						rs.Schema = &schema
 					}
 				}
-				respCode, respMsg := getRespCodeMsg(respCodeMsg)
+				respCode, respMsg := getRespCodeMsg(pkgpath, controllerName, funcName, respCodeMsg)
 				rs.Description = respMsg
 				opts.Responses[respCode] = rs
 			} else if strings.HasPrefix(t, "@Param") {
@@ -818,7 +819,7 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 				pp := strings.Split(p[2], ".")
 				typ := pp[len(pp)-1]
 				if len(pp) >= 2 {
-					m, mod, realTypes := getModel(p[2])
+					m, mod, realTypes := getModel(pkgpath, controllerName, p[2])
 					para.Schema = &Schema{
 						Ref: "#/definitions/" + m,
 					}
@@ -826,7 +827,7 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 						modelsList[pkgpath+controllerName] = make(map[string]Schema)
 					}
 					modelsList[pkgpath+controllerName][typ] = mod
-					appendModels(pkgpath, controllerName, realTypes)
+					appendModels(pkgpath, controllerName, realTypes, f.Name.Name)
 				} else {
 					if typ == "auto" {
 						typ = paramType
@@ -868,13 +869,13 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 						schema.Type = typeFormat[0]
 						schema.Format = typeFormat[1]
 					} else {
-						m, mod, realTypes := getModel(schemaName)
+						m, mod, realTypes := getModel(pkgpath, controllerName, schemaName)
 						schema.Ref = "#/definitions/" + m
 						if _, ok := modelsList[pkgpath+controllerName]; !ok {
 							modelsList[pkgpath+controllerName] = make(map[string]Schema)
 						}
 						modelsList[pkgpath+controllerName][schemaName] = mod
-						appendModels(pkgpath, controllerName, realTypes)
+						appendModels(pkgpath, controllerName, realTypes, f.Name.Name)
 					}
 					if isArray {
 						rs.Schema = &Schema{
@@ -885,7 +886,7 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 						rs.Schema = &schema
 					}
 				}
-				respCode, respMsg := getRespCodeMsg(respCodeMsg)
+				respCode, respMsg := getRespCodeMsg(pkgpath, controllerName, funcName, respCodeMsg)
 				rs.Description = respMsg
 				opts.Responses[respCode] = rs
 			} else if strings.HasPrefix(t, "@Deprecated") {
@@ -961,7 +962,7 @@ func setParamType(para *Parameter, typ string, pkgpath, controllerName string) {
 		paraType = typeFormat[0]
 		paraFormat = typeFormat[1]
 	} else {
-		m, mod, realTypes := getModel(typ)
+		m, mod, realTypes := getModel(pkgpath, controllerName, typ)
 		para.Schema = &Schema{
 			Ref: "#/definitions/" + m,
 		}
@@ -969,7 +970,7 @@ func setParamType(para *Parameter, typ string, pkgpath, controllerName string) {
 			modelsList[pkgpath+controllerName] = make(map[string]Schema)
 		}
 		modelsList[pkgpath+controllerName][typ] = mod
-		appendModels(pkgpath, controllerName, realTypes)
+		appendModels(pkgpath, controllerName, realTypes, para.Name)
 	}
 	if isArray {
 		para.Type = "array"
@@ -1064,7 +1065,7 @@ func getparams(str string) []string {
 	return r
 }
 
-func getRespCodeMsg(str string) (string, string) {
+func getRespCodeMsg(pkgpath, controllerName, funcName, str string) (string, string) {
 	code := ""
 	msg := ""
 	strs := strings.Split(str, ".")
@@ -1095,7 +1096,7 @@ func getRespCodeMsg(str string) (string, string) {
 	}
 done:
 	if code == "" {
-		beeLogger.Log.Warnf("Cannot find the response code&msg: %s", str)
+		beeLogger.Log.Warnf("Cannot find the response code&msg: [%v@%v_%v]%s", funcName, pkgpath, controllerName, str)
 		// TODO remove when all type have been supported
 		//os.Exit(1)
 	}
@@ -1103,7 +1104,7 @@ done:
 	return code, msg
 }
 
-func getModel(str string) (objectname string, m Schema, realTypes []string) {
+func getModel(pkgpath, controllerName, str string) (objectname string, m Schema, realTypes []string) {
 	strs := strings.Split(str, ".")
 	objectname = strs[len(strs)-1]
 	packageName := ""
@@ -1126,7 +1127,7 @@ func getModel(str string) (objectname string, m Schema, realTypes []string) {
 	}
 done:
 	if m.Title == "" {
-		beeLogger.Log.Fatalf("Cannot find the object: %s", str)
+		beeLogger.Log.Fatalf("Cannot find the object: [%v@%v]%s", controllerName, pkgpath, str)
 	}
 	if len(rootapi.Definitions) == 0 {
 		rootapi.Definitions = make(map[string]Schema)
@@ -1375,6 +1376,9 @@ func typeAnalyser(f *ast.Field) (isSlice bool, realType, swaggerType string) {
 		if isBasicType(val) {
 			return false, "map", basicTypes[val]
 		}
+		if _, ok := t.Value.(*ast.InterfaceType); ok {
+			return false, "map", basicTypes["interface{}"]
+		}
 		return false, val, "object"
 	case *ast.Ident: // embed struct [pkgName.]TypeName
 		basicType := fmt.Sprint(t)
@@ -1401,16 +1405,22 @@ func isBasicType(Type string) bool {
 }
 
 // append models
-func appendModels(pkgpath, controllerName string, realTypes []string) {
+func appendModels(pkgpath, controllerName string, realTypes []string, extra ...string) {
 	for _, realType := range realTypes {
 		if realType != "" && !isBasicType(strings.TrimLeft(realType, "[]")) &&
 			!strings.HasPrefix(realType, "map") && !strings.HasPrefix(realType, "&") {
 			if _, ok := modelsList[pkgpath+controllerName][realType]; ok {
 				continue
 			}
-			_, mod, newRealTypes := getModel(realType)
-			modelsList[pkgpath+controllerName][realType] = mod
-			appendModels(pkgpath, controllerName, newRealTypes)
+			if len(extra) > 0 {
+				_, mod, newRealTypes := getModel(pkgpath, extra[0], realType)
+				modelsList[pkgpath+controllerName][realType] = mod
+				appendModels(pkgpath, controllerName, newRealTypes, extra...)
+			} else {
+				_, mod, newRealTypes := getModel(pkgpath, controllerName, realType)
+				modelsList[pkgpath+controllerName][realType] = mod
+				appendModels(pkgpath, controllerName, newRealTypes)
+			}
 		}
 	}
 }
