@@ -167,6 +167,10 @@ func parseIncludeDir(currentpath string, includes []string) error {
 	//}
 
 	for _, includePath := range includes {
+		includePath = strings.TrimLeft(includePath, "/")
+		currentpath = strings.TrimRight(currentpath, "/")
+		includePath = currentpath + "/" + includePath
+		
 		fileSet := token.NewFileSet()
 		folderPkgs, err := parser.ParseDir(fileSet, includePath, func(info os.FileInfo) bool {
 			name := info.Name()
