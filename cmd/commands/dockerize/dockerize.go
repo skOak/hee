@@ -22,10 +22,10 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/skOak/hee/cmd/commands"
-	"github.com/skOak/hee/cmd/commands/version"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/utils"
+	"hee/cmd/commands"
+	"hee/cmd/commands/version"
+	beeLogger "hee/logger"
+	"hee/utils"
 )
 
 const dockerBuildTemplate = `FROM {{.BaseImage}}

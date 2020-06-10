@@ -20,11 +20,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/skOak/hee/cmd/commands"
-	"github.com/skOak/hee/cmd/commands/version"
-	"github.com/skOak/hee/config"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/utils"
+	"hee/cmd/commands"
+	"hee/cmd/commands/version"
+	"hee/config"
+	beeLogger "hee/logger"
+	"hee/utils"
 )
 
 var CmdRun = &commands.Command{

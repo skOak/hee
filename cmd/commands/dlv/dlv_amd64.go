@@ -29,10 +29,10 @@ import (
 	"github.com/derekparker/delve/service/rpccommon"
 	"github.com/derekparker/delve/terminal"
 	"github.com/fsnotify/fsnotify"
-	"github.com/skOak/hee/cmd/commands"
-	"github.com/skOak/hee/cmd/commands/version"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/utils"
+	"hee/cmd/commands"
+	"hee/cmd/commands/version"
+	beeLogger "hee/logger"
+	"hee/utils"
 )
 
 var cmdDlv = &commands.Command{

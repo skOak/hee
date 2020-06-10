@@ -14,10 +14,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/skOak/hee/cmd/commands"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/logger/colors"
-	"github.com/skOak/hee/utils"
+	"hee/cmd/commands"
+	beeLogger "hee/logger"
+	"hee/logger/colors"
+	"hee/utils"
 	"gopkg.in/yaml.v2"
 )
 

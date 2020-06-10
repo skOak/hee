@@ -18,9 +18,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	beeLogger "github.com/skOak/hee/logger"
+	
 	"gopkg.in/yaml.v2"
+	
+	beeLogger "hee/logger"
 )
 
 const confVer = 0

@@ -9,7 +9,7 @@ import (
 
 	"time"
 
-	beeLogger "github.com/skOak/hee/logger"
+	beeLogger "hee/logger"
 )
 
 // RuntimeInfo holds information about the current runtime.

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/skOak/hee/logger/colors"
-	"github.com/skOak/hee/utils"
+	"hee/logger/colors"
+	"hee/utils"
 )
 
 // Command is the unit of execution

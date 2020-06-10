@@ -10,10 +10,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/skOak/hee/cmd/commands"
-	"github.com/skOak/hee/cmd/commands/version"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/logger/colors"
+	"hee/cmd/commands"
+	"hee/cmd/commands/version"
+	beeLogger "hee/logger"
+	"hee/logger/colors"
 )
 
 var CmdFix = &commands.Command{

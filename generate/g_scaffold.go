@@ -3,9 +3,9 @@ package generate
 import (
 	"strings"
 
-	"github.com/skOak/hee/cmd/commands/migrate"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/utils"
+	"hee/cmd/commands/migrate"
+	beeLogger "hee/logger"
+	"hee/utils"
 )
 
 func GenerateScaffold(sname, fields, currpath, driver, conn string) {

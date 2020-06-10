@@ -27,15 +27,15 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"gopkg.in/yaml.v2"
 
-	beeLogger "github.com/skOak/hee/logger"
-	bu "github.com/skOak/hee/utils"
-	"sort"
+	beeLogger "hee/logger"
+	bu "hee/utils"
 )
 
 const (
@@ -161,8 +161,34 @@ func parsePackageFromDir(path string) error {
 	return nil
 }
 
-func GenerateDocs(curpath string, downdoc bool, dstPath string) {
+func parseIncludeDir(currentpath string, includes []string) error {
+	//if len(astPkgs) <= 0 {
+	//	ParsePackagesFromDir(currentpath)
+	//}
+
+	for _, includePath := range includes {
+		fileSet := token.NewFileSet()
+		folderPkgs, err := parser.ParseDir(fileSet, includePath, func(info os.FileInfo) bool {
+			name := info.Name()
+			return !info.IsDir() && !strings.HasPrefix(name, ".") && strings.HasSuffix(name, ".go")
+		}, parser.ParseComments)
+		if err != nil {
+			return err
+		}
+
+		for _, v := range folderPkgs {
+			astPkgs = append(astPkgs, v)
+		}
+	}
+
+	return nil
+}
+
+func GenerateDocs(curpath string, downdoc bool, dstPath string, includes []string) {
 	fset := token.NewFileSet()
+
+	// 扫描指定目录
+	parseIncludeDir(curpath, includes)
 
 	f, err := parser.ParseFile(fset, filepath.Join(curpath, "service/router.go"), nil, parser.ParseComments)
 	if err != nil {
@@ -616,7 +642,7 @@ func analyseControllerPkg(vendorPath, localName, pkgpath string) {
 			return
 		}
 		if pkgpath == "github.com/astaxie/beego" ||
-			strings.HasPrefix(pkgpath, "github.com/skOak/hee/") ||
+			strings.HasPrefix(pkgpath, "hee/") ||
 			strings.HasPrefix(pkgpath, "github.com/") {
 			return
 		}
@@ -663,6 +689,7 @@ func analyseControllerPkg(vendorPath, localName, pkgpath string) {
 	if err != nil {
 		beeLogger.Log.Fatalf("Error while parsing dir at '%s': %s", pkgpath, err)
 	}
+
 	for _, pkg := range astPkgs {
 		for _, fl := range pkg.Files {
 			for _, d := range fl.Decls {
@@ -671,7 +698,7 @@ func analyseControllerPkg(vendorPath, localName, pkgpath string) {
 					if specDecl.Recv != nil && len(specDecl.Recv.List) > 0 {
 						if t, ok := specDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
 							// Parse controller method
-							parserComments(specDecl, fmt.Sprint(t.X), pkgpath)
+							parserComments(specDecl, fmt.Sprint(t.X), pkgpath, fl.Imports)
 						}
 					}
 				case *ast.GenDecl:
@@ -724,7 +751,7 @@ func peekNextSplitString(ss string) (s string, spacePos int) {
 }
 
 // parse the func comments
-func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
+func parserComments(f *ast.FuncDecl, controllerName, pkgpath string, is []*ast.ImportSpec) error {
 	opts := Operation{
 		Responses: make(map[string]Response),
 	}
@@ -1110,20 +1137,20 @@ func getModel(pkgpath, controllerName, str string) (objectname string, m Schema,
 	packageName := ""
 	m.Type = "object"
 	for _, pkg := range astPkgs {
-		if strs[0] == pkg.Name {
-			for _, fl := range pkg.Files {
-				for k, d := range fl.Scope.Objects {
-					if d.Kind == ast.Typ {
-						if k != objectname {
-							continue
-						}
-						packageName = pkg.Name
-						parseObject(d, k, &m, &realTypes, astPkgs, pkg.Name, fl)
-						goto done
+		//if strs[0] == pkg.Name {
+		for _, fl := range pkg.Files {
+			for k, d := range fl.Scope.Objects {
+				if d.Kind == ast.Typ {
+					if k != objectname {
+						continue
 					}
+					packageName = strs[0]
+					parseObject(d, k, &m, &realTypes, astPkgs, pkg.Name, fl)
+					goto done
 				}
 			}
 		}
+		//}
 	}
 done:
 	if m.Title == "" {
@@ -1190,6 +1217,8 @@ func parseObject(d *ast.Object, k string, m *Schema, realTypes *[]string, astPkg
 						Type:   typeFormat[0],
 						Format: typeFormat[1],
 					}
+				} else if realType == "object" {
+					mp.Ref = "#/definitions/" + realType
 				}
 			}
 			if field.Comment != nil {
@@ -1280,12 +1309,17 @@ func parseObject(d *ast.Object, k string, m *Schema, realTypes *[]string, astPkg
 					for _, pkg := range astPkgs {
 						for _, fl := range pkg.Files {
 							for nameOfObj, obj := range fl.Scope.Objects {
-								if obj.Name == fmt.Sprint(field.Type) {
+								if strings.HasSuffix(realType, obj.Name) {
+									//if obj.Name == fmt.Sprint(field.Type) {
 									parseObject(obj, nameOfObj, nm, realTypes, astPkgs, pkg.Name, fl)
 								}
 							}
 						}
 					}
+
+					//fmt.Println("nm === ", nm.Properties)
+					//mp.Ref = "#/definitions/" + realType
+					//m.Properties[realType] = mp
 					for name, p := range nm.Properties {
 						m.Properties[name] = p
 					}
@@ -1412,6 +1446,7 @@ func appendModels(pkgpath, controllerName string, realTypes []string, extra ...s
 			if _, ok := modelsList[pkgpath+controllerName][realType]; ok {
 				continue
 			}
+
 			if len(extra) > 0 {
 				_, mod, newRealTypes := getModel(pkgpath, extra[0], realType)
 				modelsList[pkgpath+controllerName][realType] = mod

@@ -19,9 +19,9 @@ import (
 	"os"
 	"path"
 
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/logger/colors"
-	"github.com/skOak/hee/utils"
+	beeLogger "hee/logger"
+	"hee/logger/colors"
+	"hee/utils"
 )
 
 // recipe

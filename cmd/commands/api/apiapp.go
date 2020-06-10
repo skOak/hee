@@ -20,11 +20,11 @@ import (
 	path "path/filepath"
 	"strings"
 
-	"github.com/skOak/hee/cmd/commands"
-	"github.com/skOak/hee/cmd/commands/version"
-	"github.com/skOak/hee/generate"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/utils"
+	"hee/cmd/commands"
+	"hee/cmd/commands/version"
+	"hee/generate"
+	beeLogger "hee/logger"
+	"hee/utils"
 )
 
 var CmdApiapp = &commands.Command{

@@ -18,11 +18,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/skOak/hee/cmd"
-	"github.com/skOak/hee/cmd/commands"
-	"github.com/skOak/hee/config"
-	"github.com/skOak/hee/generate/swaggergen"
-	"github.com/skOak/hee/utils"
+	"hee/cmd"
+	"hee/cmd/commands"
+	"hee/config"
+	"hee/generate/swaggergen"
+	"hee/utils"
 )
 
 func main() {
@@ -63,6 +63,7 @@ func main() {
 
 			// Check if current directory is inside the GOPATH,
 			// if so parse the packages inside it.
+			//fmt.Println(utils.IsInGOPATH(currentpath) && cmd.IfGenerateDocs(c.Name(), args))
 			if utils.IsInGOPATH(currentpath) && cmd.IfGenerateDocs(c.Name(), args) {
 				swaggergen.ParsePackagesFromDir(currentpath)
 			}

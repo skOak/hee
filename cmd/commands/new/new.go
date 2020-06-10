@@ -20,11 +20,11 @@ import (
 	path "path/filepath"
 	"strings"
 
-	"github.com/skOak/hee/cmd/commands"
-	"github.com/skOak/hee/cmd/commands/version"
-	beeLogger "github.com/skOak/hee/logger"
-	"github.com/skOak/hee/logger/colors"
-	"github.com/skOak/hee/utils"
+	"hee/cmd/commands"
+	"hee/cmd/commands/version"
+	beeLogger "hee/logger"
+	"hee/logger/colors"
+	"hee/utils"
 )
 
 var CmdNew = &commands.Command{

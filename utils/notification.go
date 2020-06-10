@@ -21,7 +21,7 @@ import (
 
 	"runtime"
 
-	"github.com/skOak/hee/config"
+	"hee/config"
 )
 
 const appName = "Beego"
