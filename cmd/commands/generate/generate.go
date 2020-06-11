@@ -74,7 +74,7 @@ func init() {
 	CmdGenerate.Flag.Var(&generate.Fields, "fields", "List of table Fields.")
 	CmdGenerate.Flag.Var(&generate.DDL, "ddl", "Generate DDL Migration")
 	CmdGenerate.Flag.Var(&generate.Path, "path", "path of the generate destination")
-	CmdGenerate.Flag.Var(&generate.Include, "include", "path of the generate destination")
+	CmdGenerate.Flag.Var(&generate.Include, "include", "specify parsing directory, support multiple")
 	CmdGenerate.Flag.BoolVar(&generate.DownSwagger, "downdoc", false, "Enable auto-download of the swagger file if it does not exist.")
 	commands.AvailableCommands = append(commands.AvailableCommands, CmdGenerate)
 }
