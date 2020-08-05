@@ -165,7 +165,7 @@ func parseIncludeDir(currentpath string, includes []string) error {
 	//if len(astPkgs) <= 0 {
 	//	ParsePackagesFromDir(currentpath)
 	//}
-	
+
 	for _, includePath := range includes {
 		fileSet := token.NewFileSet()
 		folderPkgs, err := parser.ParseDir(fileSet, includePath, func(info os.FileInfo) bool {
@@ -175,21 +175,21 @@ func parseIncludeDir(currentpath string, includes []string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		for _, v := range folderPkgs {
 			astPkgs = append(astPkgs, v)
 		}
 	}
-	
+
 	return nil
 }
 
 func GenerateDocs(curpath string, downdoc bool, dstPath string, includes []string) {
 	fset := token.NewFileSet()
-	
+
 	// 扫描指定目录
 	parseIncludeDir(curpath, includes)
-	
+
 	f, err := parser.ParseFile(fset, filepath.Join(curpath, "service/router.go"), nil, parser.ParseComments)
 	if err != nil {
 		beeLogger.Log.Fatalf("Error while parsing router.go: %s", err)
@@ -943,7 +943,10 @@ func parserComments(f *ast.FuncDecl, controllerName, pkgpath string) error {
 				}
 				opts.Security = append(opts.Security, getSecurity(t))
 			} else if strings.HasPrefix(t, "@Author") {
-				opts.Author = strings.Split(strings.TrimSpace(strings.TrimSpace(t[len("@Author"):])), ",")
+				authors := strings.TrimSpace(t[len("@Author"):])
+				authors = regexp.MustCompile("\\s+").ReplaceAllString(authors, ",")
+				authors = regexp.MustCompile(",+").ReplaceAllString(authors, ",")
+				opts.Author = strings.Split(authors, ",")
 			}
 		}
 
@@ -1137,19 +1140,19 @@ func getModel(pkgpath, controllerName, str string) (objectname string, m Schema,
 	m.Type = "object"
 	for _, pkg := range astPkgs {
 		//if strs[0] == pkg.Name {
-			for _, fl := range pkg.Files {
-				for k, d := range fl.Scope.Objects {
-					if d.Kind == ast.Typ {
-						if k != objectname {
-							continue
-						}
-						//packageName = pkg.Name
-						packageName = strs[0]
-						parseObject(d, k, &m, &realTypes, astPkgs, pkg.Name, fl)
-						goto done
+		for _, fl := range pkg.Files {
+			for k, d := range fl.Scope.Objects {
+				if d.Kind == ast.Typ {
+					if k != objectname {
+						continue
 					}
+					//packageName = pkg.Name
+					packageName = strs[0]
+					parseObject(d, k, &m, &realTypes, astPkgs, pkg.Name, fl)
+					goto done
 				}
 			}
+		}
 		//}
 	}
 done:
@@ -1311,13 +1314,13 @@ func parseObject(d *ast.Object, k string, m *Schema, realTypes *[]string, astPkg
 						for _, fl := range pkg.Files {
 							for nameOfObj, obj := range fl.Scope.Objects {
 								if strings.HasSuffix(realType, obj.Name) {
-								//if obj.Name == fmt.Sprint(field.Type) {
+									//if obj.Name == fmt.Sprint(field.Type) {
 									parseObject(obj, nameOfObj, nm, realTypes, astPkgs, pkg.Name, fl)
 								}
 							}
 						}
 					}
-					
+
 					//mp.Ref = "#/definitions/" + realType
 					//m.Properties[realType] = mp
 					for name, p := range nm.Properties {
